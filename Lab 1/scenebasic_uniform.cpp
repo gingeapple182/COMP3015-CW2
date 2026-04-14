@@ -22,6 +22,7 @@ using glm::mat4;
 
 SceneBasic_Uniform::SceneBasic_Uniform() : tPrev(0), angle(0.0f), rotSpeed(glm::pi<float>() / 2.0f), plane(79.4f, 53.2f, 100, 100), sky(100.0f) {
 	XWingMesh = ObjMesh::load("media/X-Wing.obj", true);
+	TieMesh = ObjMesh::load("media/imp_fly_tiefighter.obj", true);
 	//LightsaberMesh = ObjMesh::load("media/Lightsaber_03.obj", true);
 	BladeMEsh = ObjMesh::load("media/cylinder2.obj", true);
 }
@@ -59,8 +60,8 @@ void SceneBasic_Uniform::initScene()
 
 	// model
 	XWingDiffuseTexture = Texture::loadTexture("media/texture/xwing_main.png");
-	//LSdiffuseTexture = Texture::loadTexture("media/texture/Lightsaber_03_exp_lambert1_BaseColor1.png");
 	XWingNormalMap = Texture::loadTexture("media/texture/xwing_main_n.png");
+	TieDiffuseTexture = Texture::loadTexture("media/texture/imp_fly_tiefighter.png");
 	LSmixingTexture = Texture::loadTexture("media/texture/rust.png");
 
 	// plane
@@ -276,7 +277,7 @@ void SceneBasic_Uniform::render()
 
 	prog.use();
 
-	// Lightsaber hilt
+	// X-Wing hilt
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, XWingDiffuseTexture);
 
@@ -308,6 +309,23 @@ void SceneBasic_Uniform::render()
 
 	setMatrices();
 	XWingMesh->render();
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, TieDiffuseTexture);
+
+	glActiveTexture(GL_TEXTURE2);
+	glBindTexture(GL_TEXTURE_2D, TieDiffuseTexture);
+
+	prog.setUniform("Material.Ks", vec3(0.25f));
+	prog.setUniform("Material.Ka", vec3(0.15f));
+	prog.setUniform("Material.Shininess", 80.0f);
+	prog.setUniform("MixAmount", 0.8f);
+
+	model = mat4(1.0f);
+	model = glm::translate(model, vec3(5.0f, 3.0f, 5.0f));
+	model = glm::scale(model, vec3(0.5f));
+	setMatrices();
+	TieMesh->render();
 
 	// --- PARTICLE FOUNTAIN ---
 	glDepthMask(GL_FALSE);

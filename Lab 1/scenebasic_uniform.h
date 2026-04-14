@@ -27,9 +27,11 @@ private:
     Plane plane;
     Cube cube;
     std::unique_ptr<ObjMesh> XWingMesh;
+    std::unique_ptr<ObjMesh> TieMesh;
     std::unique_ptr<ObjMesh> BladeMEsh;
     glm::mat4 rotateModel;
     GLuint XWingDiffuseTexture, XWingNormalMap, LSmixingTexture;
+	GLuint TieDiffuseTexture, TieNormalMap;
     GLuint WorkbenchDiffuseMap;
     GLuint cubeTex;
 
