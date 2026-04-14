@@ -40,6 +40,9 @@ public:
         max.z = std::fmax(max.z, other.max.z);
     }
 
+#undef min
+#undef max
+
     void reset() {
         min = glm::vec3( std::numeric_limits<float>::max());
         max = glm::vec3(-std::numeric_limits<float>::max());

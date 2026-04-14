@@ -5,7 +5,7 @@
 
 int main(int argc, char* argv[])
 {
-	SceneRunner runner("Shader_Basics");
+	SceneRunner runner("Oliver Cole COMP3015 CW2");
 
 	std::unique_ptr<Scene> scene;
 
