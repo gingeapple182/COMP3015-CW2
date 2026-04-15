@@ -31,8 +31,10 @@ void SceneBasic_Uniform::initScene()
 {
 	compile();
 	//glGenVertexArrays(1, &fsTriVao);
+	setupFBO();
 
 	prog.use();
+	prog.setUniform("ShadowMap", 3);
 	glEnable(GL_DEPTH_TEST);
 
 	glEnable(GL_STENCIL_TEST);
@@ -71,7 +73,7 @@ void SceneBasic_Uniform::initScene()
 	waveDiffuseTexture = Texture::loadTexture("media/texture/water.jpg");
 
 	// skybox
-	cubeTex = Texture::loadCubeMap("media/texture/cube/space/space");
+	cubeTex = Texture::loadCubeMap("media/texture/cube/skybox/skybox");
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_CUBE_MAP, cubeTex);
 	skyboxShader.use();
@@ -189,19 +191,213 @@ void SceneBasic_Uniform::update(float t)
 	render();
 }
 
+//void SceneBasic_Uniform::render()
+//{
+//	prog.use();
+//
+//	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+//
+//	// BlinnPhong spotlight
+//	glm::vec4 lightPosWorld = glm::vec4(10.0f * cos(angle), 10.0f, 10.0f * sin(angle), 1.0f);
+//	prog.setUniform("Spot.Position", glm::vec3(view * lightPosWorld));
+//
+//	glm::vec3 targetWorld = glm::vec3(0.0f, 2.0f, 3.0f);
+//	glm::vec3 lightDirWorldSpot = glm::normalize(targetWorld - glm::vec3(lightPosWorld));
+//
+//	glm::vec3 lightDirView = glm::mat3(view) * lightDirWorldSpot;
+//	prog.setUniform("Spot.Direction", lightDirView);
+//
+//	glm::vec3 lightDirWorld = glm::normalize(glm::vec3(-0.6f, -1.0f, -0.4f));
+//	glm::vec3 lightDirViewSpace = glm::mat3(view) * -lightDirWorld;
+//	prog.setUniform("Light.Position", glm::vec4(lightDirViewSpace, 0.0f));
+//
+//
+//	// fog
+//	prog.setUniform("FogEnabled", fogEnabled ? 1 : 0);
+//	prog.setUniform("FogScale", fogScale);
+//
+//	
+//
+//	// Skybox stuff
+//	skyboxShader.use();
+//	glActiveTexture(GL_TEXTURE0);
+//	glBindTexture(GL_TEXTURE_CUBE_MAP, cubeTex);
+//	skyboxShader.setUniform("SkyboxTex", 0);
+//
+//	glm::mat4 skyView = glm::mat4(glm::mat3(view));
+//	glm::mat4 skyMVP = projection * skyView;
+//	skyboxShader.setUniform("MVP", skyMVP);
+//
+//	skyboxShader.setUniform("FogEnabled", fogEnabled ? 1 : 0);
+//	skyboxShader.setUniform("FogColour", fogColour);
+//	skyboxShader.setUniform("SkyFogAmount", skyFogAmount);
+//
+//	sky.render();
+//
+//
+//	prog.use();
+//
+//	// Workbench
+//	glActiveTexture(GL_TEXTURE0);
+//	glBindTexture(GL_TEXTURE_2D, WorkbenchDiffuseMap);
+//
+//	glActiveTexture(GL_TEXTURE2);
+//	glBindTexture(GL_TEXTURE_2D, WorkbenchDiffuseMap);
+//
+//	prog.setUniform("Material.Ks", vec3(0.0f));
+//	prog.setUniform("Material.Ka", vec3(0.1f));
+//	prog.setUniform("Material.Shininess", 180.0f);
+//
+//	model = mat4(1.0f);
+//	model = glm::translate(model, vec3(0.0f, -1.0f, 0.0f));
+//	//model = glm::rotate(model, glm::radians(25.0f), vec3(0.0f, 1.0f, 0.0f));
+//	model = glm::scale(model, vec3(0.5f));
+//	setMatrices();
+//	//plane.render();
+//
+//	// --- WAVE PLANE RENDERING ---
+//	waveProg.use();
+//
+//	glActiveTexture(GL_TEXTURE0);
+//	glBindTexture(GL_TEXTURE_2D, waveDiffuseTexture);
+//	waveProg.setUniform("DiffuseTex", 0);
+//
+//	waveProg.setUniform("Time", waveTime);
+//
+//	waveProg.setUniform("MaterialKd", 0.2f, 0.5f, 0.9f);
+//	waveProg.setUniform("MaterialKs", 0.8f, 0.8f, 0.8f);
+//	waveProg.setUniform("MaterialKa", 0.2f, 0.5f, 0.9f);
+//	waveProg.setUniform("MaterialShininess", 100.0f);
+//
+//	model = glm::mat4(1.0f);
+//
+//	setMatricesWave();
+//	wavePlane.render();
+//
+//
+//	prog.use();
+//
+//	// X-Wing hilt
+//	glActiveTexture(GL_TEXTURE0);
+//	glBindTexture(GL_TEXTURE_2D, XWingDiffuseTexture);
+//
+//	glActiveTexture(GL_TEXTURE1);
+//	glBindTexture(GL_TEXTURE_2D, XWingNormalMap);
+//
+//	if (rusty) {
+//		glActiveTexture(GL_TEXTURE2);
+//		glBindTexture(GL_TEXTURE_2D, LSmixingTexture);
+//	}
+//	else {
+//		glActiveTexture(GL_TEXTURE2);
+//		glBindTexture(GL_TEXTURE_2D, XWingDiffuseTexture);
+//	}
+//
+//	prog.setUniform("Material.Ks", vec3(0.25f));
+//	prog.setUniform("Material.Ka", vec3(0.15f));
+//	prog.setUniform("Material.Shininess", 80.0f);
+//	prog.setUniform("MixAmount", 0.8f);
+//
+//	model = mat4(1.0f);
+//	model = glm::translate(model, shipPos);
+//	model = glm::scale(model, vec3(1.0f));
+//	model = glm::rotate(model, glm::radians(shipYawDeg), vec3(0.0f, 1.0f, 0.0f));
+//	model = glm::rotate(model, glm::radians(shipRollDeg), vec3(0.0f, 0.0f, 1.0f));
+//
+//	setMatrices();
+//	XWingMesh->render();
+//
+//	glActiveTexture(GL_TEXTURE0);
+//	glBindTexture(GL_TEXTURE_2D, TieDiffuseTexture);
+//
+//	glActiveTexture(GL_TEXTURE2);
+//	glBindTexture(GL_TEXTURE_2D, TieDiffuseTexture);
+//
+//	prog.setUniform("Material.Ks", vec3(0.25f));
+//	prog.setUniform("Material.Ka", vec3(0.15f));
+//	prog.setUniform("Material.Shininess", 80.0f);
+//	prog.setUniform("MixAmount", 0.8f);
+//
+//	model = mat4(1.0f);
+//	model = glm::translate(model, vec3(5.0f, 3.0f, 5.0f));
+//	model = glm::scale(model, vec3(0.5f));
+//	setMatrices();
+//	TieMesh->render();
+//
+//	// --- PARTICLE FOUNTAIN ---
+//	glDepthMask(GL_FALSE);
+//
+//	particleProg.use();
+//	particleProg.setUniform("Time", particleTime);
+//
+//	glm::mat4 particleModel = glm::mat4(1.0f);
+//	glm::mat4 particleMV = view * particleModel;
+//
+//	particleProg.setUniform("MV", particleMV);
+//	particleProg.setUniform("Proj", projection);
+//
+//	glActiveTexture(GL_TEXTURE0);
+//	glBindTexture(GL_TEXTURE_2D, particleTex);
+//	particleProg.setUniform("ParticleTex", 0);
+//
+//	glBindVertexArray(particleVAO);
+//
+//	glm::mat4 shipRotation = glm::mat4(1.0f);
+//	shipRotation = glm::rotate(shipRotation, glm::radians(shipYawDeg), glm::vec3(0.0f, 1.0f, 0.0f));
+//	shipRotation = glm::rotate(shipRotation, glm::radians(shipRollDeg), glm::vec3(0.0f, 0.0f, 1.0f));
+//
+//	for (const auto& offset : engineOffsets)
+//	{
+//		glm::vec3 rotatedOffset = glm::vec3(shipRotation * glm::vec4(offset, 1.0f));
+//		glm::vec3 worldEmitterPos = shipPos + rotatedOffset;
+//
+//		particleProg.setUniform("EmitterPos", worldEmitterPos);
+//		glDrawArraysInstanced(GL_TRIANGLES, 0, 6, nParticles);
+//	}
+//
+//	glBindVertexArray(0);
+//	glDepthMask(GL_TRUE);
+//
+//}
+
 void SceneBasic_Uniform::render()
 {
-	prog.use();
+	// Light setup
+	glm::vec4 lightPosWorld = glm::vec4(10.0f * cos(angle), 10.0f, 10.0f * sin(angle), 1.0f);
+	glm::vec3 lightTarget = glm::vec3(0.0f, 2.0f, 3.0f);
 
+	lightView = glm::lookAt(glm::vec3(lightPosWorld), lightTarget, glm::vec3(0.0f, 1.0f, 0.0f));
+	lightProj = glm::perspective(glm::radians(45.0f), 1.0f, 1.0f, 50.0f);
+
+	// ---------- PASS 1: render shadow map ----------
+	glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
+	glViewport(0, 0, shadowMapWidth, shadowMapHeight);
+	glClear(GL_DEPTH_BUFFER_BIT);
+
+	projection = lightProj;
+	view = lightView;
+
+	glEnable(GL_CULL_FACE);
+	glCullFace(GL_FRONT);
+
+	drawShadowCasters();
+
+	glCullFace(GL_BACK);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	// ---------- PASS 2: render scene normally ----------
+	glViewport(0, 0, width, height);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-	// BlinnPhong spotlight
-	glm::vec4 lightPosWorld = glm::vec4(10.0f * cos(angle), 10.0f, 10.0f * sin(angle), 1.0f);
+	projection = glm::perspective(glm::radians(70.0f), (float)width / height, 0.3f, 100.0f);
+	updateCamera(0.0f);
+
+	prog.use();
+
+	// Spotlight uniforms
 	prog.setUniform("Spot.Position", glm::vec3(view * lightPosWorld));
 
-	glm::vec3 targetWorld = glm::vec3(0.0f, 2.0f, 3.0f);
-	glm::vec3 lightDirWorldSpot = glm::normalize(targetWorld - glm::vec3(lightPosWorld));
-
+	glm::vec3 lightDirWorldSpot = glm::normalize(lightTarget - glm::vec3(lightPosWorld));
 	glm::vec3 lightDirView = glm::mat3(view) * lightDirWorldSpot;
 	prog.setUniform("Spot.Direction", lightDirView);
 
@@ -209,14 +405,9 @@ void SceneBasic_Uniform::render()
 	glm::vec3 lightDirViewSpace = glm::mat3(view) * -lightDirWorld;
 	prog.setUniform("Light.Position", glm::vec4(lightDirViewSpace, 0.0f));
 
-
-	// fog
 	prog.setUniform("FogEnabled", fogEnabled ? 1 : 0);
 	prog.setUniform("FogScale", fogScale);
 
-	
-
-	// Skybox stuff
 	skyboxShader.use();
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_CUBE_MAP, cubeTex);
@@ -232,28 +423,10 @@ void SceneBasic_Uniform::render()
 
 	sky.render();
 
-
 	prog.use();
 
-	// Workbench
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, WorkbenchDiffuseMap);
+	drawSceneMain();
 
-	glActiveTexture(GL_TEXTURE2);
-	glBindTexture(GL_TEXTURE_2D, WorkbenchDiffuseMap);
-
-	prog.setUniform("Material.Ks", vec3(0.0f));
-	prog.setUniform("Material.Ka", vec3(0.1f));
-	prog.setUniform("Material.Shininess", 180.0f);
-
-	model = mat4(1.0f);
-	model = glm::translate(model, vec3(0.0f, -1.0f, 0.0f));
-	//model = glm::rotate(model, glm::radians(25.0f), vec3(0.0f, 1.0f, 0.0f));
-	model = glm::scale(model, vec3(0.5f));
-	setMatrices();
-	//plane.render();
-
-	// --- WAVE PLANE RENDERING ---
 	waveProg.use();
 
 	glActiveTexture(GL_TEXTURE0);
@@ -268,66 +441,11 @@ void SceneBasic_Uniform::render()
 	waveProg.setUniform("MaterialShininess", 100.0f);
 
 	model = glm::mat4(1.0f);
-	//model = glm::rotate(model, glm::radians(-10.0f), glm::vec3(0, 0, 1));
-	//model = glm::rotate(model, glm::radians(50.0f), glm::vec3(1, 0, 0));
-
 	setMatricesWave();
 	wavePlane.render();
 
-
 	prog.use();
 
-	// X-Wing hilt
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, XWingDiffuseTexture);
-
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, XWingNormalMap);
-
-	if (rusty) {
-		glActiveTexture(GL_TEXTURE2);
-		glBindTexture(GL_TEXTURE_2D, LSmixingTexture);
-	}
-	else {
-		glActiveTexture(GL_TEXTURE2);
-		glBindTexture(GL_TEXTURE_2D, XWingDiffuseTexture);
-	}
-
-	prog.setUniform("Material.Ks", vec3(0.25f));
-	prog.setUniform("Material.Ka", vec3(0.15f));
-	prog.setUniform("Material.Shininess", 80.0f);
-	prog.setUniform("MixAmount", 0.8f);
-
-	model = mat4(1.0f);
-	//model = glm::translate(model, vec3(0.0f, 2.0f, 0.0f));
-	model = glm::translate(model, shipPos);
-	model = glm::scale(model, vec3(1.0f));
-	//model = glm::rotate(model, glm::radians(270.0f), vec3(1.0f, 0.0f, 0.0f));
-	//model = glm::rotate(model, glm::radians(300.0f), vec3(0.0f, 0.0f, 1.0f));
-	model = glm::rotate(model, glm::radians(shipYawDeg), vec3(0.0f, 1.0f, 0.0f));
-	model = glm::rotate(model, glm::radians(shipRollDeg), vec3(0.0f, 0.0f, 1.0f));
-
-	setMatrices();
-	XWingMesh->render();
-
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, TieDiffuseTexture);
-
-	glActiveTexture(GL_TEXTURE2);
-	glBindTexture(GL_TEXTURE_2D, TieDiffuseTexture);
-
-	prog.setUniform("Material.Ks", vec3(0.25f));
-	prog.setUniform("Material.Ka", vec3(0.15f));
-	prog.setUniform("Material.Shininess", 80.0f);
-	prog.setUniform("MixAmount", 0.8f);
-
-	model = mat4(1.0f);
-	model = glm::translate(model, vec3(5.0f, 3.0f, 5.0f));
-	model = glm::scale(model, vec3(0.5f));
-	setMatrices();
-	TieMesh->render();
-
-	// --- PARTICLE FOUNTAIN ---
 	glDepthMask(GL_FALSE);
 
 	particleProg.use();
@@ -361,13 +479,25 @@ void SceneBasic_Uniform::render()
 	glBindVertexArray(0);
 	glDepthMask(GL_TRUE);
 
+	prog.use();
+
 }
+
+//void SceneBasic_Uniform::setMatrices() {
+//	mat4 mv = view * model;
+//	prog.setUniform("ModelViewMatrix", mv);
+//	prog.setUniform("NormalMatrix", glm::mat3(vec3(mv[0]), vec3(mv[1]), vec3(mv[2])));
+//	prog.setUniform("MVP", projection * mv);
+//}
 
 void SceneBasic_Uniform::setMatrices() {
 	mat4 mv = view * model;
 	prog.setUniform("ModelViewMatrix", mv);
 	prog.setUniform("NormalMatrix", glm::mat3(vec3(mv[0]), vec3(mv[1]), vec3(mv[2])));
 	prog.setUniform("MVP", projection * mv);
+
+	glm::mat4 shadowMatrix = shadowBias * lightProj * lightView * model;
+	prog.setUniform("ShadowMatrix", shadowMatrix);
 }
 
 void SceneBasic_Uniform::setMatricesWave()
@@ -499,4 +629,161 @@ void SceneBasic_Uniform::updateCamera(float dt)
 	glm::vec3 camTarget = shipPos + camTargetOffset;
 	view = glm::lookAt(camPos, camTarget, camUp);
 	
+}
+
+void SceneBasic_Uniform::setupFBO()
+{
+	glGenTextures(1, &shadowTex);
+	glBindTexture(GL_TEXTURE_2D, shadowTex);
+
+	glTexImage2D(
+		GL_TEXTURE_2D,
+		0,
+		GL_DEPTH_COMPONENT24,
+		shadowMapWidth,
+		shadowMapHeight,
+		0,
+		GL_DEPTH_COMPONENT,
+		GL_FLOAT,
+		nullptr
+	);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+
+	float border[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+	glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, border);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LESS);
+
+	glGenFramebuffers(1, &shadowFBO);
+	glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowTex, 0);
+
+	glDrawBuffer(GL_NONE);
+	glReadBuffer(GL_NONE);
+
+	GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+	if (status != GL_FRAMEBUFFER_COMPLETE) {
+		std::cerr << "Shadow framebuffer is not complete!" << std::endl;
+	}
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+
+void SceneBasic_Uniform::drawShadowCasters()
+{
+	prog.use();
+
+	// X-Wing
+	model = mat4(1.0f);
+	model = glm::translate(model, shipPos);
+	model = glm::scale(model, vec3(1.0f));
+	model = glm::rotate(model, glm::radians(shipYawDeg), vec3(0.0f, 1.0f, 0.0f));
+	model = glm::rotate(model, glm::radians(shipRollDeg), vec3(0.0f, 0.0f, 1.0f));
+	setMatrices();
+	XWingMesh->render();
+
+	// TIE
+	model = mat4(1.0f);
+	model = glm::translate(model, vec3(5.0f, 3.0f, 5.0f));
+	model = glm::scale(model, vec3(0.5f));
+	setMatrices();
+	TieMesh->render();
+
+	// Flat receiver plane for testing
+	model = mat4(1.0f);
+	model = glm::translate(model, vec3(0.0f, -1.5f, 0.0f));
+	model = glm::scale(model, vec3(3.0f));
+	setMatrices();
+	plane.render();
+}
+
+
+void SceneBasic_Uniform::drawSceneMain()
+{
+	prog.use();
+
+	// Test receiver plane
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, WorkbenchDiffuseMap);
+
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, XWingNormalMap); // temporary just so slot 1 has something valid
+
+	glActiveTexture(GL_TEXTURE2);
+	glBindTexture(GL_TEXTURE_2D, WorkbenchDiffuseMap);
+
+	glActiveTexture(GL_TEXTURE3);
+	glBindTexture(GL_TEXTURE_2D, shadowTex);
+
+	prog.setUniform("UseFlatColour", 1);
+	prog.setUniform("FlatColour", glm::vec3(0.7f, 0.7f, 0.7f));
+
+	prog.setUniform("Material.Ks", vec3(0.0f));
+	prog.setUniform("Material.Ka", vec3(0.1f));
+	prog.setUniform("Material.Shininess", 180.0f);
+	prog.setUniform("MixAmount", 0.0f);
+
+	model = mat4(1.0f);
+	model = glm::translate(model, vec3(0.0f, -1.5f, 0.0f));
+	model = glm::scale(model, vec3(3.0f));
+	setMatrices();
+	plane.render();
+
+	prog.setUniform("UseFlatColour", 0);
+
+	// X-Wing
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, XWingDiffuseTexture);
+
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, XWingNormalMap);
+
+	glActiveTexture(GL_TEXTURE2);
+	glBindTexture(GL_TEXTURE_2D, rusty ? LSmixingTexture : XWingDiffuseTexture);
+
+	glActiveTexture(GL_TEXTURE3);
+	glBindTexture(GL_TEXTURE_2D, shadowTex);
+
+	prog.setUniform("Material.Ks", vec3(0.25f));
+	prog.setUniform("Material.Ka", vec3(0.15f));
+	prog.setUniform("Material.Shininess", 80.0f);
+	prog.setUniform("MixAmount", 0.8f);
+
+	model = mat4(1.0f);
+	model = glm::translate(model, shipPos);
+	model = glm::scale(model, vec3(1.0f));
+	model = glm::rotate(model, glm::radians(shipYawDeg), vec3(0.0f, 1.0f, 0.0f));
+	model = glm::rotate(model, glm::radians(shipRollDeg), vec3(0.0f, 0.0f, 1.0f));
+	setMatrices();
+	XWingMesh->render();
+
+	// TIE
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, TieDiffuseTexture);
+
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, XWingNormalMap); // temporary fallback, replace with real TIE normal if you get one
+
+	glActiveTexture(GL_TEXTURE2);
+	glBindTexture(GL_TEXTURE_2D, TieDiffuseTexture);
+
+	glActiveTexture(GL_TEXTURE3);
+	glBindTexture(GL_TEXTURE_2D, shadowTex);
+
+	prog.setUniform("Material.Ks", vec3(0.25f));
+	prog.setUniform("Material.Ka", vec3(0.15f));
+	prog.setUniform("Material.Shininess", 80.0f);
+	prog.setUniform("MixAmount", 0.0f);
+
+	model = mat4(1.0f);
+	model = glm::translate(model, vec3(5.0f, 3.0f, 5.0f));
+	model = glm::scale(model, vec3(0.5f));
+	setMatrices();
+	TieMesh->render();
 }

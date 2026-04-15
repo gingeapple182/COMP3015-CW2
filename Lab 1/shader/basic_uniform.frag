@@ -5,12 +5,13 @@ in vec3 LightDir;
 in vec3 ViewDir;
 in vec2 TexCoord;
 in vec3 ViewPos;
+in vec4 ShadowCoord;
 
 layout (location = 0) out vec4 FragColor;
 layout (binding = 0) uniform sampler2D DiffuseTex;
 layout (binding = 1) uniform sampler2D NormalMapTex;
 layout (binding = 2) uniform sampler2D MixingTex;
-
+layout (binding = 3) uniform sampler2DShadow ShadowMap;
 
 uniform struct MaterialInfo{
     vec3 Kd;
@@ -40,60 +41,34 @@ uniform struct FogInfo{
     vec3 Colour;
 }Fog;
 
-//const int levels = 5;
-//const float scaleFactor = 1.0/levels;
-
-// Fog controls (simple + robust)
-uniform int   FogEnabled;   // 0 = off, 1 = on
-uniform float FogScale;     // 1.0 = normal, >1 stronger fog, <1 weaker
-
-// Mixing 
-uniform float MixAmount; // 0 = only DiffuseTex, 1 = full MixingTex (scaled by mask)
+uniform int   FogEnabled;
+uniform float FogScale;
+uniform float MixAmount;
+uniform int UseFlatColour;
+uniform vec3 FlatColour;
 
 vec3 getBaseColour()
 {
+    if (UseFlatColour != 0)
+        return FlatColour;
+
     vec4 a = texture(DiffuseTex, TexCoord);
     vec4 b = texture(MixingTex, TexCoord);
 
-    // Use MixingTex alpha as the per-pixel mask.
-    // If your MixingTex doesn't have alpha, use b.r (or dot(b.rgb, vec3(0.333))) instead.
     float mask = b.a;
-
     float t = clamp(mask * MixAmount, 0.0, 1.0);
     return mix(a.rgb, b.rgb, t);
-}
-
-vec3 blinnPhong(vec3 n) {
-    vec3 diffuse = vec3(0.0f);
-    vec3 spec = vec3(0.0f);
-
-    vec3 texColour = getBaseColour();
-
-    vec3 ambient = Light.La * texColour;
-    vec3 s = normalize(LightDir);
-
-    float sDotN = max(dot(s, n), 0.0);
-    diffuse = texColour * sDotN;
-
-    if (sDotN > 0.0) {
-        vec3 v = normalize(ViewDir);
-        vec3 h = normalize(v + s);
-        spec = Material.Ks * pow(max(dot(h, n), 0.0), Material.Shininess);
-    }
-    return ambient + (diffuse + spec) * Light.L;
 }
 
 vec3 blinnPhongSpot(vec3 n)
 {
     vec3 texColour = getBaseColour();
-
     vec3 ambient = Spot.La * texColour;
 
     vec3 s = normalize(LightDir);
     vec3 v = normalize(ViewDir);
 
     float cosAng = dot(normalize(-s), normalize(SpotDir));
-
     float outer = cos(Spot.Cutoff);
     float inner = cos(Spot.Cutoff * 0.85);
 
@@ -116,12 +91,23 @@ vec3 blinnPhongSpot(vec3 n)
     return ambient + spotScale * Spot.L * (diffuse + spec);
 }
 
-
 float fogFactorLinear(float dist)
 {
-    // 1 = fully shaded, 0 = fully fog
     float f = (Fog.MaxDistance - dist) / (Fog.MaxDistance - Fog.MinDistance);
     return clamp(f, 0.0, 1.0);
+}
+
+float getShadowFactor()
+{
+    if (ShadowCoord.w <= 0.0)
+        return 1.0;
+
+    vec3 projCoords = ShadowCoord.xyz / ShadowCoord.w;
+
+    if (projCoords.z < 0.0 || projCoords.z > 1.0)
+        return 1.0;
+
+    return texture(ShadowMap, projCoords);
 }
 
 void main()
@@ -131,15 +117,21 @@ void main()
 
     vec3 litColour = blinnPhongSpot(normal);
 
+    vec3 baseTex = getBaseColour();
+    vec3 ambientOnly = Spot.La * baseTex;
+
+    float shadow = getShadowFactor();
+    vec3 shadedColour = mix(ambientOnly, litColour, shadow);
+
     if (FogEnabled != 0)
     {
         float dist = length(ViewPos) * max(FogScale, 0.0001);
         float f = fogFactorLinear(dist);
-        vec3 finalColour = mix(Fog.Colour, litColour, f);
+        vec3 finalColour = mix(Fog.Colour, shadedColour, f);
         FragColor = vec4(finalColour, 1.0);
     }
     else
     {
-        FragColor = vec4(litColour, 1.0);
+        FragColor = vec4(shadedColour, 1.0);
     }
 }

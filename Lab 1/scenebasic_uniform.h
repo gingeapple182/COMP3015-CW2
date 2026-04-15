@@ -46,7 +46,7 @@ private:
     float angle = 0.0f;
     float rotSpeed;
     bool bladeOn = false;
-    bool fogEnabled = true;
+    bool fogEnabled = false;
     float fogScale = 1.0f;
     bool rusty = false;
 
@@ -109,22 +109,39 @@ private:
     glm::vec3(1.75f, -1.0f,  7.75f),
     glm::vec3(-1.75f, -1.0f,  7.75f)
     };
-
-    // Camera stuff (ORBIT)
-    
- 
     
 
     // Camera stuff (STATIC FOLLOW)
     glm::vec3 shipPos = glm::vec3(0.0f, 2.0f, 0.0f);
 
     glm::vec3 camTarget = glm::vec3(0.0f, 0.75f, 0.0f); // focus point (central model)
-    glm::vec3 camOffset = glm::vec3(0.0f, 5.0f, 14.0f);
+    glm::vec3 camOffset = glm::vec3(0.0f, 7.0f, 20.0);
 
     glm::vec3 camPos = glm::vec3(5.0f, 7.5f, 7.5f);
     glm::vec3 camUp = glm::vec3(0.0f, 1.0f, 0.0f);
     glm::vec3 camTargetOffset = glm::vec3(0.0f, 1.2f, 0.0f);
 
+    // -- shadows
+    GLuint shadowFBO = 0;
+    GLuint shadowTex = 0;
+
+    int shadowMapWidth = 2048;
+    int shadowMapHeight = 2048;
+
+    glm::mat4 lightView = glm::mat4(1.0f);
+    glm::mat4 lightProj = glm::mat4(1.0f);
+    glm::mat4 shadowBias = glm::mat4(
+        0.5f, 0.0f, 0.0f, 0.0f,
+        0.0f, 0.5f, 0.0f, 0.0f,
+        0.0f, 0.0f, 0.5f, 0.0f,
+        0.5f, 0.5f, 0.5f, 1.0f
+    );
+
+    bool shadowPass = false;
+
+    void setupFBO();
+    void drawShadowCasters();
+    void drawSceneMain();
 
 public:
     SceneBasic_Uniform();

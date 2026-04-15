@@ -10,6 +10,7 @@ out vec3 LightDir;
 out vec3 ViewDir;
 out vec2 TexCoord;
 out vec3 ViewPos;
+out vec4 ShadowCoord;
 
 uniform struct LightInfo{
     vec4 Position;
@@ -28,38 +29,36 @@ uniform struct SpotLightInfo{
 
 uniform mat4 ModelViewMatrix;
 uniform mat3 NormalMatrix;
-uniform mat4 ProjectionMatrix;
 uniform mat4 MVP;
-
-out vec3 LightIntensity, n, pos;
+uniform mat4 ShadowMatrix;
 
 void main()
 {
-	vec3 N = normalize(NormalMatrix * VertexNormal);
-	vec3 T = normalize(NormalMatrix * vec3(VertexTangent.xyz));
+    vec3 N = normalize(NormalMatrix * VertexNormal);
+    vec3 T = normalize(NormalMatrix * vec3(VertexTangent.xyz));
 
-	T = normalize(T - N * dot(N, T));
+    T = normalize(T - N * dot(N, T));
 
-	vec3 B = cross(N, T) * VertexTangent.w;
-	
-	// Columns are T, B, N
-	mat3 TBN = mat3(T, B, N);
-	mat3 invTBN = transpose(TBN);
-		
-	vec3 Position = (ModelViewMatrix * vec4(VertexPosition, 1.0)).xyz;
-	ViewPos = Position;
-	
-	vec3 lightDir;
-	if (Light.Position.w == 0.0)
-		lightDir = normalize(Light.Position.xyz);       // directional
-	else
-		lightDir = Light.Position.xyz - Position;        // point light
-	LightDir = invTBN * lightDir;
+    vec3 B = cross(N, T) * VertexTangent.w;
 
-	ViewDir = invTBN * normalize(-Position);
-	SpotDir = invTBN * normalize(Spot.Direction);
+    mat3 TBN = mat3(T, B, N);
+    mat3 invTBN = transpose(TBN);
 
-	TexCoord = VertexTexCoord;
+    vec3 Position = (ModelViewMatrix * vec4(VertexPosition, 1.0)).xyz;
+    ViewPos = Position;
 
-	gl_Position = MVP * vec4(VertexPosition, 1.0);
+    vec3 lightDir;
+    if (Light.Position.w == 0.0)
+        lightDir = normalize(Light.Position.xyz);
+    else
+        lightDir = Light.Position.xyz - Position;
+
+    LightDir = invTBN * lightDir;
+    ViewDir = invTBN * normalize(-Position);
+    SpotDir = invTBN * normalize(Spot.Direction);
+
+    TexCoord = VertexTexCoord;
+
+    ShadowCoord = ShadowMatrix * vec4(VertexPosition, 1.0);
+    gl_Position = MVP * vec4(VertexPosition, 1.0);
 }
