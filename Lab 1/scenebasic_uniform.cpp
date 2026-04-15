@@ -20,12 +20,39 @@ using glm::vec4;
 using glm::mat3;
 using glm::mat4;
 
-SceneBasic_Uniform::SceneBasic_Uniform() : tPrev(0), angle(0.0f), rotSpeed(glm::pi<float>() / 2.0f), plane(79.4f, 53.2f, 100, 100), sky(100.0f) {
+/*
+Contents:
+1. Constructor
+2. Scene lifecycle
+3. Core render / matrix helpers
+4. Model transform helpers
+5. General utility helpers
+6. Particle helpers
+7. Camera / shadow helpers
+8. Scene draw passes
+9. Lane movement helpers
+*/
+
+
+// =========================================================
+// 1. Constructor
+// =========================================================
+
+SceneBasic_Uniform::SceneBasic_Uniform()
+	: tPrev(0),
+	angle(0.0f),
+	rotSpeed(glm::pi<float>() / 2.0f),
+	plane(79.4f, 53.2f, 100, 100),
+	sky(100.0f)
+{
 	XWingMesh = ObjMesh::load("media/X-Wing.obj", true);
 	TieMesh = ObjMesh::load("media/imp_fly_tiefighter.obj", true);
-	//LightsaberMesh = ObjMesh::load("media/Lightsaber_03.obj", true);
-	BladeMEsh = ObjMesh::load("media/cylinder2.obj", true);
 }
+
+
+// =========================================================
+// 2. Scene lifecycle
+// =========================================================
 
 void SceneBasic_Uniform::initScene()
 {
@@ -49,8 +76,7 @@ void SceneBasic_Uniform::initScene()
 	rotateModel = glm::translate(rotateModel, vec3(4.0f, 0.26f, 5.0f));
 	angle = 0.0f;
 
-
-	//blinnPhongSpot stuff
+	// blinnPhongSpot stuff
 	prog.setUniform("Spot.L", vec3(0.7f));
 	prog.setUniform("Spot.La", vec3(0.5f));
 	prog.setUniform("Spot.Exponent", 25.0f);
@@ -58,7 +84,6 @@ void SceneBasic_Uniform::initScene()
 
 	prog.setUniform("Light.L", vec3(0.5f));
 	prog.setUniform("Light.La", vec3(0.25f));
-
 
 	// model
 	XWingDiffuseTexture = Texture::loadTexture("media/texture/xwing_main.png");
@@ -69,7 +94,7 @@ void SceneBasic_Uniform::initScene()
 	// plane
 	WorkbenchDiffuseMap = Texture::loadTexture("media/texture/workbench.png");
 
-	//wave
+	// wave
 	waveDiffuseTexture = Texture::loadTexture("media/texture/water.jpg");
 
 	// skybox
@@ -80,7 +105,6 @@ void SceneBasic_Uniform::initScene()
 	skyboxShader.setUniform("FogColour", fogColour);
 
 	// fog
-	fogColour = bladeColours[bladeColourIndex];
 	prog.use();
 	prog.setUniform("Fog.MinDistance", 10.0f);
 	prog.setUniform("Fog.MaxDistance", 45.0f);
@@ -96,7 +120,6 @@ void SceneBasic_Uniform::initScene()
 	initParticleBuffers();
 
 	particleTex = Texture::loadTexture("media/texture/fire.png");
-	//emitterPos = shipPos + glm::vec3(1.75f, 1.0f, 7.75f);
 	particleProg.use();
 	particleProg.setUniform("ParticleTex", 0);
 	particleProg.setUniform("ParticleLifetime", particleLifetime);
@@ -104,8 +127,17 @@ void SceneBasic_Uniform::initScene()
 	particleProg.setUniform("Gravity", glm::vec3(0.0f, -0.2f, 0.0f));
 	//particleProg.setUniform("EmitterPos", emitterPos);
 
+	waveProg.use();
+	waveProg.setUniform("ShadowMap", 3);
+
 	prog.use();
+
+	// lane runner defaults
+	currentLane = 1;
+	updateShipLanePosition();
+	resetTieObstacle();
 }
+
 
 void SceneBasic_Uniform::compile()
 {
@@ -132,7 +164,6 @@ void SceneBasic_Uniform::compile()
 		particleFlatProg.compileShader("shader/flat_vert.glsl");
 		particleFlatProg.compileShader("shader/flat_frag.glsl");
 		particleFlatProg.link();
-
 	}
 	catch (GLSLProgramException& e) {
 		cerr << e.what() << endl;
@@ -140,25 +171,53 @@ void SceneBasic_Uniform::compile()
 	}
 }
 
+
 void SceneBasic_Uniform::update(float t)
 {
 	float deltaT = t - tPrev;
 	if (tPrev == 0.0f)
 		deltaT = 0.0f;
+
 	tPrev = t;
+
 	angle += 0.25f * deltaT;
 	if (angle > glm::two_pi<float>())
 		angle -= glm::two_pi<float>();
 
-	waveTime = t;
+	if (waveAnimationEnabled)
+	{
+		waveTime = t;
+	}
 
-	//particleTime = fmod(t, particleLifetime);
+	if (forwardScrollEnabled)
+	{
+		forwardScrollOffset += forwardScrollSpeed * deltaT;
+	}
+
+	updateTieObstacle(deltaT);
+	
+
 	particleTime = t;
 	particleAngle = fmod(particleAngle + 0.01f, glm::two_pi<float>());
 
 	GLFWwindow* win = glfwGetCurrentContext();
 	if (win)
 	{
+		bool cNow = glfwGetKey(win, GLFW_KEY_C) == GLFW_PRESS;
+		if (cNow && !C_Pressed)
+		{
+			waveAnimationEnabled = !waveAnimationEnabled;
+		}
+		C_Pressed = cNow;
+		bool fNow = glfwGetKey(win, GLFW_KEY_F) == GLFW_PRESS;
+		if (fNow && !F_Pressed)
+		{
+			forwardScrollEnabled = !forwardScrollEnabled;
+		}
+		F_Pressed = fNow;
+		updateLaneInput(win);
+		updateShipLanePosition();
+
 		float rollInput = 0.0f;
 
 		if (glfwGetKey(win, GLFW_KEY_A) == GLFW_PRESS || glfwGetKey(win, GLFW_KEY_LEFT) == GLFW_PRESS)
@@ -191,174 +250,6 @@ void SceneBasic_Uniform::update(float t)
 	render();
 }
 
-//void SceneBasic_Uniform::render()
-//{
-//	prog.use();
-//
-//	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-//
-//	// BlinnPhong spotlight
-//	glm::vec4 lightPosWorld = glm::vec4(10.0f * cos(angle), 10.0f, 10.0f * sin(angle), 1.0f);
-//	prog.setUniform("Spot.Position", glm::vec3(view * lightPosWorld));
-//
-//	glm::vec3 targetWorld = glm::vec3(0.0f, 2.0f, 3.0f);
-//	glm::vec3 lightDirWorldSpot = glm::normalize(targetWorld - glm::vec3(lightPosWorld));
-//
-//	glm::vec3 lightDirView = glm::mat3(view) * lightDirWorldSpot;
-//	prog.setUniform("Spot.Direction", lightDirView);
-//
-//	glm::vec3 lightDirWorld = glm::normalize(glm::vec3(-0.6f, -1.0f, -0.4f));
-//	glm::vec3 lightDirViewSpace = glm::mat3(view) * -lightDirWorld;
-//	prog.setUniform("Light.Position", glm::vec4(lightDirViewSpace, 0.0f));
-//
-//
-//	// fog
-//	prog.setUniform("FogEnabled", fogEnabled ? 1 : 0);
-//	prog.setUniform("FogScale", fogScale);
-//
-//	
-//
-//	// Skybox stuff
-//	skyboxShader.use();
-//	glActiveTexture(GL_TEXTURE0);
-//	glBindTexture(GL_TEXTURE_CUBE_MAP, cubeTex);
-//	skyboxShader.setUniform("SkyboxTex", 0);
-//
-//	glm::mat4 skyView = glm::mat4(glm::mat3(view));
-//	glm::mat4 skyMVP = projection * skyView;
-//	skyboxShader.setUniform("MVP", skyMVP);
-//
-//	skyboxShader.setUniform("FogEnabled", fogEnabled ? 1 : 0);
-//	skyboxShader.setUniform("FogColour", fogColour);
-//	skyboxShader.setUniform("SkyFogAmount", skyFogAmount);
-//
-//	sky.render();
-//
-//
-//	prog.use();
-//
-//	// Workbench
-//	glActiveTexture(GL_TEXTURE0);
-//	glBindTexture(GL_TEXTURE_2D, WorkbenchDiffuseMap);
-//
-//	glActiveTexture(GL_TEXTURE2);
-//	glBindTexture(GL_TEXTURE_2D, WorkbenchDiffuseMap);
-//
-//	prog.setUniform("Material.Ks", vec3(0.0f));
-//	prog.setUniform("Material.Ka", vec3(0.1f));
-//	prog.setUniform("Material.Shininess", 180.0f);
-//
-//	model = mat4(1.0f);
-//	model = glm::translate(model, vec3(0.0f, -1.0f, 0.0f));
-//	//model = glm::rotate(model, glm::radians(25.0f), vec3(0.0f, 1.0f, 0.0f));
-//	model = glm::scale(model, vec3(0.5f));
-//	setMatrices();
-//	//plane.render();
-//
-//	// --- WAVE PLANE RENDERING ---
-//	waveProg.use();
-//
-//	glActiveTexture(GL_TEXTURE0);
-//	glBindTexture(GL_TEXTURE_2D, waveDiffuseTexture);
-//	waveProg.setUniform("DiffuseTex", 0);
-//
-//	waveProg.setUniform("Time", waveTime);
-//
-//	waveProg.setUniform("MaterialKd", 0.2f, 0.5f, 0.9f);
-//	waveProg.setUniform("MaterialKs", 0.8f, 0.8f, 0.8f);
-//	waveProg.setUniform("MaterialKa", 0.2f, 0.5f, 0.9f);
-//	waveProg.setUniform("MaterialShininess", 100.0f);
-//
-//	model = glm::mat4(1.0f);
-//
-//	setMatricesWave();
-//	wavePlane.render();
-//
-//
-//	prog.use();
-//
-//	// X-Wing hilt
-//	glActiveTexture(GL_TEXTURE0);
-//	glBindTexture(GL_TEXTURE_2D, XWingDiffuseTexture);
-//
-//	glActiveTexture(GL_TEXTURE1);
-//	glBindTexture(GL_TEXTURE_2D, XWingNormalMap);
-//
-//	if (rusty) {
-//		glActiveTexture(GL_TEXTURE2);
-//		glBindTexture(GL_TEXTURE_2D, LSmixingTexture);
-//	}
-//	else {
-//		glActiveTexture(GL_TEXTURE2);
-//		glBindTexture(GL_TEXTURE_2D, XWingDiffuseTexture);
-//	}
-//
-//	prog.setUniform("Material.Ks", vec3(0.25f));
-//	prog.setUniform("Material.Ka", vec3(0.15f));
-//	prog.setUniform("Material.Shininess", 80.0f);
-//	prog.setUniform("MixAmount", 0.8f);
-//
-//	model = mat4(1.0f);
-//	model = glm::translate(model, shipPos);
-//	model = glm::scale(model, vec3(1.0f));
-//	model = glm::rotate(model, glm::radians(shipYawDeg), vec3(0.0f, 1.0f, 0.0f));
-//	model = glm::rotate(model, glm::radians(shipRollDeg), vec3(0.0f, 0.0f, 1.0f));
-//
-//	setMatrices();
-//	XWingMesh->render();
-//
-//	glActiveTexture(GL_TEXTURE0);
-//	glBindTexture(GL_TEXTURE_2D, TieDiffuseTexture);
-//
-//	glActiveTexture(GL_TEXTURE2);
-//	glBindTexture(GL_TEXTURE_2D, TieDiffuseTexture);
-//
-//	prog.setUniform("Material.Ks", vec3(0.25f));
-//	prog.setUniform("Material.Ka", vec3(0.15f));
-//	prog.setUniform("Material.Shininess", 80.0f);
-//	prog.setUniform("MixAmount", 0.8f);
-//
-//	model = mat4(1.0f);
-//	model = glm::translate(model, vec3(5.0f, 3.0f, 5.0f));
-//	model = glm::scale(model, vec3(0.5f));
-//	setMatrices();
-//	TieMesh->render();
-//
-//	// --- PARTICLE FOUNTAIN ---
-//	glDepthMask(GL_FALSE);
-//
-//	particleProg.use();
-//	particleProg.setUniform("Time", particleTime);
-//
-//	glm::mat4 particleModel = glm::mat4(1.0f);
-//	glm::mat4 particleMV = view * particleModel;
-//
-//	particleProg.setUniform("MV", particleMV);
-//	particleProg.setUniform("Proj", projection);
-//
-//	glActiveTexture(GL_TEXTURE0);
-//	glBindTexture(GL_TEXTURE_2D, particleTex);
-//	particleProg.setUniform("ParticleTex", 0);
-//
-//	glBindVertexArray(particleVAO);
-//
-//	glm::mat4 shipRotation = glm::mat4(1.0f);
-//	shipRotation = glm::rotate(shipRotation, glm::radians(shipYawDeg), glm::vec3(0.0f, 1.0f, 0.0f));
-//	shipRotation = glm::rotate(shipRotation, glm::radians(shipRollDeg), glm::vec3(0.0f, 0.0f, 1.0f));
-//
-//	for (const auto& offset : engineOffsets)
-//	{
-//		glm::vec3 rotatedOffset = glm::vec3(shipRotation * glm::vec4(offset, 1.0f));
-//		glm::vec3 worldEmitterPos = shipPos + rotatedOffset;
-//
-//		particleProg.setUniform("EmitterPos", worldEmitterPos);
-//		glDrawArraysInstanced(GL_TRIANGLES, 0, 6, nParticles);
-//	}
-//
-//	glBindVertexArray(0);
-//	glDepthMask(GL_TRUE);
-//
-//}
 
 void SceneBasic_Uniform::render()
 {
@@ -408,6 +299,7 @@ void SceneBasic_Uniform::render()
 	prog.setUniform("FogEnabled", fogEnabled ? 1 : 0);
 	prog.setUniform("FogScale", fogScale);
 
+	// Skybox
 	skyboxShader.use();
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_CUBE_MAP, cubeTex);
@@ -423,29 +315,42 @@ void SceneBasic_Uniform::render()
 
 	sky.render();
 
+	// Main lit scene objects
 	prog.use();
-
 	drawSceneMain();
 
+	// Wave surface
 	waveProg.use();
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, waveDiffuseTexture);
 	waveProg.setUniform("DiffuseTex", 0);
 
+	glActiveTexture(GL_TEXTURE3);
+	glBindTexture(GL_TEXTURE_2D, shadowTex);
+	waveProg.setUniform("ShadowMap", 3);
+
 	waveProg.setUniform("Time", waveTime);
+	waveProg.setUniform("ForwardOffset", forwardScrollOffset);
+
+	//glm::vec3 lightDirWorld = glm::normalize(glm::vec3(-0.6f, -1.0f, -0.4f));
+	//glm::vec3 lightDirViewSpace = glm::mat3(view) * -lightDirWorld;
+
+	waveProg.setUniform("LightPosition", glm::vec4(lightDirViewSpace, 0.0f));
+	waveProg.setUniform("LightIntensity", glm::vec3(0.5f));
+	waveProg.setUniform("AmbientLight", glm::vec3(0.25f));
 
 	waveProg.setUniform("MaterialKd", 0.2f, 0.5f, 0.9f);
 	waveProg.setUniform("MaterialKs", 0.8f, 0.8f, 0.8f);
 	waveProg.setUniform("MaterialKa", 0.2f, 0.5f, 0.9f);
 	waveProg.setUniform("MaterialShininess", 100.0f);
 
-	model = glm::mat4(1.0f);
+	setWaveModelMatrix();
 	setMatricesWave();
 	wavePlane.render();
 
+	// Particle pass
 	prog.use();
-
 	glDepthMask(GL_FALSE);
 
 	particleProg.use();
@@ -480,17 +385,24 @@ void SceneBasic_Uniform::render()
 	glDepthMask(GL_TRUE);
 
 	prog.use();
-
 }
 
-//void SceneBasic_Uniform::setMatrices() {
-//	mat4 mv = view * model;
-//	prog.setUniform("ModelViewMatrix", mv);
-//	prog.setUniform("NormalMatrix", glm::mat3(vec3(mv[0]), vec3(mv[1]), vec3(mv[2])));
-//	prog.setUniform("MVP", projection * mv);
-//}
 
-void SceneBasic_Uniform::setMatrices() {
+void SceneBasic_Uniform::resize(int w, int h)
+{
+	glViewport(0, 0, w, h);
+	width = w;
+	height = h;
+	projection = glm::perspective(glm::radians(70.0f), (float)w / h, 0.3f, 100.0f);
+}
+
+
+// =========================================================
+// 3. Core render / matrix helpers
+// =========================================================
+
+void SceneBasic_Uniform::setMatrices()
+{
 	mat4 mv = view * model;
 	prog.setUniform("ModelViewMatrix", mv);
 	prog.setUniform("NormalMatrix", glm::mat3(vec3(mv[0]), vec3(mv[1]), vec3(mv[2])));
@@ -500,6 +412,7 @@ void SceneBasic_Uniform::setMatrices() {
 	prog.setUniform("ShadowMatrix", shadowMatrix);
 }
 
+
 void SceneBasic_Uniform::setMatricesWave()
 {
 	glm::mat4 mv = view * model;
@@ -507,12 +420,49 @@ void SceneBasic_Uniform::setMatricesWave()
 	waveProg.setUniform("NormalMatrix",
 		glm::mat3(glm::vec3(mv[0]), glm::vec3(mv[1]), glm::vec3(mv[2])));
 	waveProg.setUniform("MVP", projection * mv);
+	waveProg.setUniform("ModelMatrix", model);
+
+	glm::mat4 shadowMatrix = shadowBias * lightProj * lightView * model;
+	waveProg.setUniform("ShadowMatrix", shadowMatrix);
 }
+
+
+// =========================================================
+// 4. Model transform helpers
+// =========================================================
+
+void SceneBasic_Uniform::setWaveModelMatrix()
+{
+	model = glm::mat4(1.0f);
+	model = glm::translate(model, glm::vec3(0.0f, 0.0f, shipPos.z) + wavePlaneOffset);
+	model = glm::scale(model, wavePlaneScale);
+}
+
+
+void SceneBasic_Uniform::setXWingModelMatrix()
+{
+	model = glm::mat4(1.0f);
+	model = glm::translate(model, shipPos);
+	model = glm::scale(model, xwingScale);
+	model = glm::rotate(model, glm::radians(shipYawDeg), glm::vec3(0.0f, 1.0f, 0.0f));
+	model = glm::rotate(model, glm::radians(shipRollDeg), glm::vec3(0.0f, 0.0f, 1.0f));
+}
+
+
+void SceneBasic_Uniform::setTieModelMatrix()
+{
+	model = glm::mat4(1.0f);
+	model = glm::translate(model, tiePos);
+	model = glm::scale(model, tieScale);
+}
+
+
+// =========================================================
+// 5. General utility helpers
+// =========================================================
 
 void SceneBasic_Uniform::updateFogColour()
 {
-	fogColour = bladeOn ? bladeColours[bladeColourIndex] : fogGrey;
-
 	// update shaders for skybox + normal
 	prog.use();
 	prog.setUniform("Fog.Colour", fogColour);
@@ -521,13 +471,6 @@ void SceneBasic_Uniform::updateFogColour()
 	skyboxShader.setUniform("FogColour", fogColour);
 }
 
-void SceneBasic_Uniform::resize(int w, int h) {
-	glViewport(0, 0, w, h);
-	width = w;
-	height = h;
-	projection = glm::perspective(glm::radians(70.0f), (float)w / h, 0.3f, 100.0f);
-	//initHiltEdgeFbo(w, h);
-}
 
 static float wrapDeg(float a)
 {
@@ -536,9 +479,16 @@ static float wrapDeg(float a)
 	return a;
 }
 
-float SceneBasic_Uniform::randFloat() {
+
+float SceneBasic_Uniform::randFloat()
+{
 	return rand.nextFloat();
 }
+
+
+// =========================================================
+// 6. Particle helpers
+// =========================================================
 
 void SceneBasic_Uniform::initParticleBuffers()
 {
@@ -623,13 +573,18 @@ void SceneBasic_Uniform::initParticleBuffers()
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
+
+// =========================================================
+// 7. Camera / shadow helpers
+// =========================================================
+
 void SceneBasic_Uniform::updateCamera(float dt)
 {
-	camPos = shipPos + camOffset;
-	glm::vec3 camTarget = shipPos + camTargetOffset;
+	camPos = glm::vec3(0.0f, shipPos.y, shipPos.z) + camOffset;
+	glm::vec3 camTarget = glm::vec3(shipPos.x, shipPos.y, shipPos.z) + camTargetOffset;
 	view = glm::lookAt(camPos, camTarget, camUp);
-	
 }
+
 
 void SceneBasic_Uniform::setupFBO()
 {
@@ -675,23 +630,21 @@ void SceneBasic_Uniform::setupFBO()
 }
 
 
+// =========================================================
+// 8. Scene draw passes
+// =========================================================
+
 void SceneBasic_Uniform::drawShadowCasters()
 {
 	prog.use();
 
 	// X-Wing
-	model = mat4(1.0f);
-	model = glm::translate(model, shipPos);
-	model = glm::scale(model, vec3(1.0f));
-	model = glm::rotate(model, glm::radians(shipYawDeg), vec3(0.0f, 1.0f, 0.0f));
-	model = glm::rotate(model, glm::radians(shipRollDeg), vec3(0.0f, 0.0f, 1.0f));
+	setXWingModelMatrix();
 	setMatrices();
 	XWingMesh->render();
 
 	// TIE
-	model = mat4(1.0f);
-	model = glm::translate(model, vec3(5.0f, 3.0f, 5.0f));
-	model = glm::scale(model, vec3(0.5f));
+	setTieModelMatrix();
 	setMatrices();
 	TieMesh->render();
 
@@ -701,6 +654,16 @@ void SceneBasic_Uniform::drawShadowCasters()
 	model = glm::scale(model, vec3(3.0f));
 	setMatrices();
 	plane.render();
+
+	// Wave surface also casts / receives shadow information
+	waveProg.use();
+	waveProg.setUniform("Time", waveTime);
+
+	setWaveModelMatrix();
+	setMatricesWave();
+	wavePlane.render();
+
+	prog.use();
 }
 
 
@@ -755,11 +718,7 @@ void SceneBasic_Uniform::drawSceneMain()
 	prog.setUniform("Material.Shininess", 80.0f);
 	prog.setUniform("MixAmount", 0.8f);
 
-	model = mat4(1.0f);
-	model = glm::translate(model, shipPos);
-	model = glm::scale(model, vec3(1.0f));
-	model = glm::rotate(model, glm::radians(shipYawDeg), vec3(0.0f, 1.0f, 0.0f));
-	model = glm::rotate(model, glm::radians(shipRollDeg), vec3(0.0f, 0.0f, 1.0f));
+	setXWingModelMatrix();
 	setMatrices();
 	XWingMesh->render();
 
@@ -781,9 +740,76 @@ void SceneBasic_Uniform::drawSceneMain()
 	prog.setUniform("Material.Shininess", 80.0f);
 	prog.setUniform("MixAmount", 0.0f);
 
-	model = mat4(1.0f);
-	model = glm::translate(model, vec3(5.0f, 3.0f, 5.0f));
-	model = glm::scale(model, vec3(0.5f));
+	setTieModelMatrix();
 	setMatrices();
 	TieMesh->render();
+}
+
+
+// =========================================================
+// 9. Lane movement helpers
+// =========================================================
+
+void SceneBasic_Uniform::updateLaneInput(GLFWwindow* win)
+{
+	bool leftNow = glfwGetKey(win, GLFW_KEY_A) == GLFW_PRESS ||
+		glfwGetKey(win, GLFW_KEY_LEFT) == GLFW_PRESS;
+
+	bool rightNow = glfwGetKey(win, GLFW_KEY_D) == GLFW_PRESS ||
+		glfwGetKey(win, GLFW_KEY_RIGHT) == GLFW_PRESS;
+
+	// Only move lanes on a fresh press
+	if (leftNow && !leftLanePressed)
+	{
+		currentLane--;
+		if (currentLane < 0)
+			currentLane = 0;
+	}
+
+	if (rightNow && !rightLanePressed)
+	{
+		currentLane++;
+		if (currentLane > laneCount - 1)
+			currentLane = laneCount - 1;
+	}
+
+	leftLanePressed = leftNow;
+	rightLanePressed = rightNow;
+}
+
+
+void SceneBasic_Uniform::updateShipLanePosition()
+{
+	// lane 0 = -laneSpacing, lane 1 = 0, lane 2 = +laneSpacing
+	shipPos.x = (currentLane - 1) * laneSpacing;
+}
+
+void SceneBasic_Uniform::randomiseTieLane()
+{
+	tieLane = static_cast<int>(randFloat() * laneCount);
+
+	if (tieLane < 0) tieLane = 0;
+	if (tieLane >= laneCount) tieLane = laneCount - 1;
+}
+
+void SceneBasic_Uniform::resetTieObstacle()
+{
+	randomiseTieLane();
+	
+	tiePos.x = (tieLane - 1) * laneSpacing;
+	tiePos.y = tieY;
+	tiePos.z = tieStartZ;
+}
+
+void SceneBasic_Uniform::updateTieObstacle(float deltaT)
+{
+	if (!forwardScrollEnabled)
+		return;
+	
+	tiePos.z += tieMoveSpeed * deltaT;
+
+	if (tiePos.z > tieDespawnZ)
+	{
+		resetTieObstacle();
+	}
 }

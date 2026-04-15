@@ -5,12 +5,13 @@
 
 #include <glm/glm.hpp>
 #include <glad/glad.h>
+#include <GLFW/glfw3.h>
+
 #include "helper/glslprogram.h"
 #include "helper/torus.h"
 #include "helper/teapot.h"
 #include "helper/plane.h"
 #include "helper/objmesh.h"
-#include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <array>
 #include "helper/cube.h"
@@ -18,110 +19,165 @@
 #include "helper/particleutils.h"
 #include "helper/random.h"
 
-
 class SceneBasic_Uniform : public Scene
 {
 private:
-    glm::mat4 rotationMatrix;
+    // =========================================================
+    // Core scene geometry / meshes
+    // =========================================================
     SkyBox sky;
     Plane plane;
+    Plane wavePlane = Plane(50.0f, 50.0f, 400, 400);
     Cube cube;
+
     std::unique_ptr<ObjMesh> XWingMesh;
     std::unique_ptr<ObjMesh> TieMesh;
-    std::unique_ptr<ObjMesh> BladeMEsh;
+
+    // =========================================================
+    // Shared transform matrices
+    // =========================================================
+    glm::mat4 rotationMatrix;
     glm::mat4 rotateModel;
+
+    // =========================================================
+    // Textures
+    // =========================================================
     GLuint XWingDiffuseTexture, XWingNormalMap, LSmixingTexture;
-	GLuint TieDiffuseTexture, TieNormalMap;
+    GLuint TieDiffuseTexture, TieNormalMap;
     GLuint WorkbenchDiffuseMap;
+    GLuint waveDiffuseTexture;
     GLuint cubeTex;
 
-    float waveAngle;
-    float waveTime;
-    Plane wavePlane = Plane(13.0f, 10.0f, 200, 2);
-    GLuint waveDiffuseTexture;
-    void setMatricesWave();
-
-
+    // =========================================================
+    // General scene timing / animation state
+    // =========================================================
     float tPrev = 0.0f;
     float angle = 0.0f;
     float rotSpeed;
-    bool bladeOn = false;
+
+    float waveAngle = 0.0f;
+    float waveTime = 0.0f;
+
+    bool waveAnimationEnabled = true;
+    bool forwardScrollEnabled = false;
+    float forwardScrollOffset = 0.0f;
+    float forwardScrollSpeed = -4.0f;
+
+    // =========================================================
+    // Feature toggles / render state
+    // =========================================================
     bool fogEnabled = false;
     float fogScale = 1.0f;
     bool rusty = false;
 
-    // Input keys
+    // =========================================================
+    // Input key state
+    // =========================================================
     bool Q_Pressed = false;
     bool E_Pressed = false;
     bool F_Pressed = false;
     bool R_Pressed = false;
     bool C_Pressed = false;
 
+    // =========================================================
+    // Ship rotation / movement feel
+    // =========================================================
+    float shipYawDeg = 0.0f;
+
     float shipRollDeg = 0.0f;
     float shipRollSpeed = 90.0f;
     float maxShipRollDeg = 25.0f;
 
-    glm::vec3 bladeColour;
-    std::array<glm::vec3, 6> bladeColours = {
-        glm::vec3(0.0f, 0.5f, 1.0f),  // BLUE
-        glm::vec3(0.0f, 1.0f, 0.0f),   // GREEN
-        glm::vec3(1.0f, 1.0f, 0.0f),   // YELLOW
-        glm::vec3(1.0f, 0.0f, 0.0f),   // RED
-        glm::vec3(1.0f, 0.0f, 1.0f),   // MAGENTA
-        glm::vec3(1.0f, 1.0f, 1.0f),    // WHITE
-    };
-    int bladeColourIndex = 0;
+    // =========================================================
+    // Fog colour settings
+    // =========================================================
+    
     glm::vec3 fogColour = glm::vec3(0.6f, 0.6f, 0.6f);
-    const glm::vec3 fogGrey = glm::vec3(0.6f, 0.6f, 0.6f);
     float skyFogAmount = 0.35f;
 
+    // =========================================================
+    // Shader programs
+    // =========================================================
+    GLSLProgram prog, skyboxShader, waveProg, particleProg, particleFlatProg;
 
-    GLSLProgram prog, skyboxShader, bladeEmissive, waveProg, particleProg, particleFlatProg;
-    void compile();
-    void setMatrices();
-    void updateFogColour();
-    void updateCamera(float dt);
-    void initParticleBuffers();
-    float randFloat();
+    // =========================================================
+    // Random helper
+    // =========================================================
     Random rand;
 
-
-    float shipYawDeg = 0.0f;
-    float hiltYawSpeed = 90.0f;
-
-    //particle stuff
+    // =========================================================
+    // Particle system
+    // =========================================================
     GLuint initVelBuf, birthTimeBuf;
     GLuint particleVAO;
     GLuint nParticles = 2000;
     GLuint particleTex;
 
     float particleLifetime = 0.3f;
-    glm::vec3 emitterPos = glm::vec3(0.0f, 1.5f, 0.0f);
-
-    glm::vec3 emitterDir = glm::vec3(0.0f, 0.0f, 1.0f);
-
     float particleTime = 0.0f;
     float particleAngle = 0.0f;
 
-    std::array<glm::vec3, 4> engineOffsets = {
+    glm::vec3 emitterPos = glm::vec3(0.0f, 1.5f, 0.0f);
+    glm::vec3 emitterDir = glm::vec3(0.0f, 0.0f, 1.0f);
+
+    /*std::array<glm::vec3, 4> engineOffsets = {
     glm::vec3(1.75f, 1.0f,  7.75f),
     glm::vec3(-1.75f, 1.0f,  7.75f),
     glm::vec3(1.75f, -1.0f,  7.75f),
     glm::vec3(-1.75f, -1.0f,  7.75f)
+    };*/
+
+    std::array<glm::vec3, 4> engineOffsets = {
+        glm::vec3(0.85f, 0.5f,  3.875f),
+        glm::vec3(-0.875f, 0.5f,  3.875f),
+        glm::vec3(0.875f, -0.5f,  3.875f),
+        glm::vec3(-0.875f, -0.5f,  3.875f)
     };
-    
 
-    // Camera stuff (STATIC FOLLOW)
+    // =========================================================
+    // Object transform settings
+    // =========================================================
+
+    // Wave
+    glm::vec3 wavePlaneScale = glm::vec3(2.0f, 1.0f, 2.0f);
+    glm::vec3 wavePlaneOffset = glm::vec3(0.0f, 0.0f, 0.0f);
+
+    // X-Wing
     glm::vec3 shipPos = glm::vec3(0.0f, 2.0f, 0.0f);
+    glm::vec3 xwingScale = glm::vec3(0.5f);
 
-    glm::vec3 camTarget = glm::vec3(0.0f, 0.75f, 0.0f); // focus point (central model)
-    glm::vec3 camOffset = glm::vec3(0.0f, 7.0f, 20.0);
+    // TIE obstacle
+    glm::vec3 tiePos = glm::vec3(0.0f, 3.0f, -30.0f);
+    glm::vec3 tieScale = glm::vec3(0.6f);
 
-    glm::vec3 camPos = glm::vec3(5.0f, 7.5f, 7.5f);
+    int tieLane = 1;
+    float tieMoveSpeed = 10.0f;
+    float tieStartZ = -50.0f;
+    float tieDespawnZ = 25.0f;
+    float tieY = 3.0f;
+
+    // =========================================================
+    // Camera settings
+    // =========================================================
+    glm::vec3 camTarget = glm::vec3(0.0f, 1.0f, 0.0f);
+    glm::vec3 camOffset = glm::vec3(0.0f, 5.5f, 18.0f);
+
+    glm::vec3 camPos = glm::vec3(0.0f, 6.0f, 14.0f);
     glm::vec3 camUp = glm::vec3(0.0f, 1.0f, 0.0f);
-    glm::vec3 camTargetOffset = glm::vec3(0.0f, 1.2f, 0.0f);
+    glm::vec3 camTargetOffset = glm::vec3(0.0f, 2.0f, -6.0f);
 
-    // -- shadows
+    // =========================================================
+    // Lane runner movement
+    // =========================================================
+    static constexpr int laneCount = 3;
+    int currentLane = 1;      // 0 = left, 1 = centre, 2 = right
+    float laneSpacing = 6.0f; // adjust if needed for your model scale
+    bool leftLanePressed = false;
+    bool rightLanePressed = false;
+
+    // =========================================================
+    // Shadow mapping
+    // =========================================================
     GLuint shadowFBO = 0;
     GLuint shadowTex = 0;
 
@@ -130,6 +186,7 @@ private:
 
     glm::mat4 lightView = glm::mat4(1.0f);
     glm::mat4 lightProj = glm::mat4(1.0f);
+
     glm::mat4 shadowBias = glm::mat4(
         0.5f, 0.0f, 0.0f, 0.0f,
         0.0f, 0.5f, 0.0f, 0.0f,
@@ -139,10 +196,33 @@ private:
 
     bool shadowPass = false;
 
+    // =========================================================
+    // Private helper functions
+    // =========================================================
+    void compile();
+    void setMatrices();
+    void setMatricesWave();
+
+    void updateFogColour();
+    void updateCamera(float dt);
+
+    void initParticleBuffers();
+    float randFloat();
+
+    void setWaveModelMatrix();
+    void setXWingModelMatrix();
+    void setTieModelMatrix();
+
     void setupFBO();
     void drawShadowCasters();
     void drawSceneMain();
 
+    void updateLaneInput(GLFWwindow* win);
+    void updateShipLanePosition();
+
+    void randomiseTieLane();
+    void resetTieObstacle();
+    void updateTieObstacle(float deltaT);
 public:
     SceneBasic_Uniform();
 
@@ -150,7 +230,6 @@ public:
     void update(float t);
     void render();
     void resize(int, int);
-
 };
 
 #endif // SCENEBASIC_UNIFORM_H
