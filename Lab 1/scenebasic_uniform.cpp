@@ -50,6 +50,22 @@ SceneBasic_Uniform::SceneBasic_Uniform()
 	TieMesh = ObjMesh::load("media/imp_fly_tiefighter.obj", true);
 }
 
+SceneBasic_Uniform::~SceneBasic_Uniform()
+{
+	if (xwingEngineLoop)
+	{
+		xwingEngineLoop->stop();
+		xwingEngineLoop->drop();
+		xwingEngineLoop = nullptr;
+	}
+
+	if (soundEngine)
+	{
+		soundEngine->drop();
+		soundEngine = nullptr;
+	}
+}
+
 
 // =========================================================
 // 2. Scene lifecycle
@@ -60,6 +76,13 @@ void SceneBasic_Uniform::initScene()
 	compile();
 	//glGenVertexArrays(1, &fsTriVao);
 	setupFBO();
+
+	soundEngine = createIrrKlangDevice();
+
+	if (!soundEngine)
+	{
+		std::cerr << "Failed to create irrKlang sound engine.\n";
+	}
 
 	prog.use();
 	prog.setUniform("ShadowMap", 3);
@@ -1087,10 +1110,11 @@ void SceneBasic_Uniform::randomiseTieLane()
 void SceneBasic_Uniform::resetTieObstacle()
 {
 	randomiseTieLane();
-	
+
 	tiePos.x = (tieLane - 1) * laneSpacing;
 	tiePos.y = tieY;
 	tiePos.z = tieStartZ;
+	tieHasPassedPlayer = false;
 }
 
 void SceneBasic_Uniform::updateTieObstacle(float deltaT)
@@ -1100,9 +1124,19 @@ void SceneBasic_Uniform::updateTieObstacle(float deltaT)
 
 	tiePos.z += tieMoveSpeed * deltaT;
 
+	if (!tieHasPassedPlayer && tiePos.z > shipPos.z)
+	{
+		tieHasPassedPlayer = true;
+		score += 100;
+
+		if (soundEngine)
+		{
+			soundEngine->play2D("media/audio/tie_flyby.mp3", false);
+		}
+	}
+
 	if (tiePos.z > tieDespawnZ)
 	{
-		score += 100;
 		resetTieObstacle();
 	}
 }
@@ -1126,6 +1160,8 @@ void SceneBasic_Uniform::triggerGameOver()
 	runState = RunState::GameOver;
 	forwardScrollEnabled = false;
 
+	stopXWingEngineLoop();
+
 	explosionActive = true;
 	explosionStartTime = particleTime;
 	explosionPos = shipPos;
@@ -1134,11 +1170,18 @@ void SceneBasic_Uniform::triggerGameOver()
 	smokeStartTime = particleTime;
 	smokePos = glm::vec3(shipPos.x, 0.2f, shipPos.z);
 
+	if (soundEngine)
+	{
+		soundEngine->play2D("media/audio/xwing_explode.mp3", false);
+	}
+
 	std::cout << "GAME OVER\n";
 }
 
 void SceneBasic_Uniform::restartGame()
 {
+	stopXWingEngineLoop();
+
 	runState = RunState::Playing;
 	forwardScrollEnabled = true;
 
@@ -1155,6 +1198,43 @@ void SceneBasic_Uniform::restartGame()
 
 	explosionActive = false;
 	smokeActive = false;
+
+	startXWingEngineLoop();
+}
+
+// =========================================================
+// Audio
+// =========================================================
+
+void SceneBasic_Uniform::startXWingEngineLoop()
+{
+	if (!soundEngine)
+		return;
+
+	if (xwingEngineLoop)
+		return;
+
+	xwingEngineLoop = soundEngine->play2D(
+		"media/audio/xwing_loop.wav",
+		true,   // looped
+		false,  // start immediately
+		true    // return ISound*
+	);
+
+	if (xwingEngineLoop)
+	{
+		xwingEngineLoop->setVolume(0.25f);
+	}
+}
+
+void SceneBasic_Uniform::stopXWingEngineLoop()
+{
+	if (!xwingEngineLoop)
+		return;
+
+	xwingEngineLoop->stop();
+	xwingEngineLoop->drop();
+	xwingEngineLoop = nullptr;
 }
 
 // =========================================================

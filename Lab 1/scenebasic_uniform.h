@@ -7,6 +7,8 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
+#include <irrKlang.h>
+
 #include "helper/glslprogram.h"
 #include "helper/torus.h"
 #include "helper/teapot.h"
@@ -19,6 +21,8 @@
 #include "helper/particleutils.h"
 #include "helper/random.h"
 #include "helper/text_renderer.h"
+
+using namespace irrklang;
 
 class SceneBasic_Uniform : public Scene
 {
@@ -198,6 +202,7 @@ private:
     float tieBaseMoveSpeed = 10.0f;
     float tieMoveSpeed = 10.0f;
     float tieMaxMoveSpeed = 40.0f;
+    bool tieHasPassedPlayer = false;
     float difficultyTime = 0.0f;
     float speedIncreasePerSecond = 1.2f;
     float tieStartZ = -50.0f;
@@ -248,6 +253,12 @@ private:
     bool shadowPass = false;
 
     // =========================================================
+    // Audio
+    // =========================================================
+    ISoundEngine* soundEngine = nullptr;
+    ISound* xwingEngineLoop = nullptr;
+
+    // =========================================================
     // Private helper functions
     // =========================================================
     void compile();
@@ -281,10 +292,14 @@ private:
     void triggerGameOver();
     void restartGame();
 
+    void startXWingEngineLoop();
+    void stopXWingEngineLoop();
+
     void renderUI();
 
 public:
     SceneBasic_Uniform();
+    ~SceneBasic_Uniform();
 
     void initScene();
     void update(float t);
