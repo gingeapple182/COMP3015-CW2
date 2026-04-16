@@ -5,7 +5,8 @@
 
 int main(int argc, char* argv[])
 {
-	SceneRunner runner("Oliver Cole COMP3015 CW2");
+	//SceneRunner runner("Oliver Cole COMP3015 CW2");
+	SceneRunner runner("Oliver Cole COMP3015 CW2", 1280, 720);
 
 	std::unique_ptr<Scene> scene;
 

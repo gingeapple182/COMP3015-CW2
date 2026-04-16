@@ -44,7 +44,7 @@ SceneBasic_Uniform::SceneBasic_Uniform()
 	angle(0.0f),
 	rotSpeed(glm::pi<float>() / 2.0f),
 	plane(79.4f, 53.2f, 100, 100),
-	sky(100.0f)
+	sky(120.0f)
 {
 	XWingMesh = ObjMesh::load("media/X-Wing.obj", true);
 	TieMesh = ObjMesh::load("media/imp_fly_tiefighter.obj", true);
@@ -99,7 +99,7 @@ void SceneBasic_Uniform::initScene()
 	waveDiffuseTexture = Texture::loadTexture("media/texture/water.jpg");
 
 	// skybox
-	cubeTex = Texture::loadCubeMap("media/texture/cube/skybox/skybox");
+	cubeTex = Texture::loadCubeMap("media/texture/cube/skybox1/skybox");
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_CUBE_MAP, cubeTex);
 	skyboxShader.use();
@@ -242,15 +242,9 @@ void SceneBasic_Uniform::update(float t)
 		bool fNow = glfwGetKey(win, GLFW_KEY_F) == GLFW_PRESS;
 		if (fNow && !F_Pressed)
 		{
-			if (runState == RunState::StartScreen)
+			if (runState == RunState::StartScreen || runState == RunState::GameOver)
 			{
-				runState = RunState::Playing;
-				forwardScrollEnabled = true;
-				score = 0;
-				resetTieObstacle();
-				currentLane = 1;
-				updateShipLanePosition();
-				shipRollDeg = 0.0f;
+				restartGame();
 			}
 		}
 		F_Pressed = fNow;
@@ -260,10 +254,16 @@ void SceneBasic_Uniform::update(float t)
 			if (forwardScrollEnabled)
 			{
 				forwardScrollOffset += forwardScrollSpeed * deltaT;
+
+				difficultyTime += deltaT;
+				tieMoveSpeed = glm::min(
+					tieBaseMoveSpeed + difficultyTime * speedIncreasePerSecond,
+					tieMaxMoveSpeed
+				);
 			}
 
 			updateTieObstacle(deltaT);
-
+			
 			if (checkTieCollision())
 			{
 				triggerGameOver();
@@ -340,7 +340,7 @@ void SceneBasic_Uniform::render()
 	glViewport(0, 0, width, height);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-	projection = glm::perspective(glm::radians(70.0f), (float)width / height, 0.3f, 100.0f);
+	projection = glm::perspective(glm::radians(70.0f), (float)width / height, 0.3f, 300.0f);
 	updateCamera(0.0f);
 
 	// Convert directional light into view space for normal scene shading
@@ -414,6 +414,11 @@ void SceneBasic_Uniform::render()
 
 		particleProg.use();
 		particleProg.setUniform("Time", particleTime);
+
+		// Restore normal engine particle settings every frame
+		particleProg.setUniform("ParticleLifetime", particleLifetime);
+		particleProg.setUniform("ParticleSize", 0.4f);
+		particleProg.setUniform("Gravity", glm::vec3(0.0f, -0.2f, 0.0f));
 
 		glm::mat4 particleModel = glm::mat4(1.0f);
 		glm::mat4 particleMV = view * particleModel;
@@ -515,7 +520,7 @@ void SceneBasic_Uniform::resize(int w, int h)
 	glViewport(0, 0, w, h);
 	width = w;
 	height = h;
-	projection = glm::perspective(glm::radians(70.0f), (float)w / h, 0.3f, 100.0f);
+	projection = glm::perspective(glm::radians(70.0f), (float)w / h, 0.3f, 300.0f);
 
 	textRenderer.resize(w, h);
 }
@@ -1132,6 +1137,26 @@ void SceneBasic_Uniform::triggerGameOver()
 	std::cout << "GAME OVER\n";
 }
 
+void SceneBasic_Uniform::restartGame()
+{
+	runState = RunState::Playing;
+	forwardScrollEnabled = true;
+
+	score = 0;
+	difficultyTime = 0.0f;
+	tieMoveSpeed = tieBaseMoveSpeed;
+	forwardScrollOffset = 0.0f;
+
+	currentLane = 1;
+	updateShipLanePosition();
+	shipRollDeg = 0.0f;
+
+	resetTieObstacle();
+
+	explosionActive = false;
+	smokeActive = false;
+}
+
 // =========================================================
 // UI
 // =========================================================
@@ -1163,6 +1188,8 @@ void SceneBasic_Uniform::renderUI()
 
 		std::string scoreText = "FINAL SCORE: " + std::to_string(score);
 		textRenderer.renderTextShadowed(scoreText, 40.0f, height - 150.0f, 1.0f);
+
+		textRenderer.renderTextShadowed("PRESS F TO RESTART", 40.0f, height - 190.0f, 1.0f);
 	}
 
 	glEnable(GL_DEPTH_TEST);

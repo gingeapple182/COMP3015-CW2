@@ -28,7 +28,7 @@ private:
     // =========================================================
     SkyBox sky;
     Plane plane;
-    Plane wavePlane = Plane(50.0f, 50.0f, 400, 400);
+    Plane wavePlane = Plane(250.0f, 250.0f, 400, 400);
     Cube cube;
 
     std::unique_ptr<ObjMesh> XWingMesh;
@@ -195,7 +195,11 @@ private:
     glm::vec3 tieScale = glm::vec3(0.6f);
 
     int tieLane = 1;
+    float tieBaseMoveSpeed = 10.0f;
     float tieMoveSpeed = 10.0f;
+    float tieMaxMoveSpeed = 40.0f;
+    float difficultyTime = 0.0f;
+    float speedIncreasePerSecond = 1.2f;
     float tieStartZ = -50.0f;
     float tieDespawnZ = 25.0f;
     float tieY = 3.0f;
@@ -275,6 +279,7 @@ private:
 
     bool checkTieCollision() const;
     void triggerGameOver();
+    void restartGame();
 
     void renderUI();
 

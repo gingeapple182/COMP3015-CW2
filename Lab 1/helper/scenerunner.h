@@ -3,8 +3,8 @@
 #include <GLFW/glfw3.h>
 #include "glutils.h"
 
-#define WIN_WIDTH 800
-#define WIN_HEIGHT 600
+#define WIN_WIDTH 1280
+#define WIN_HEIGHT 720
 
 #include <map>
 #include <string>
@@ -41,7 +41,8 @@ public:
         }
 
         // Open the window
-        window = glfwCreateWindow( WIN_WIDTH, WIN_HEIGHT, windowTitle.c_str(), NULL, NULL );
+        //window = glfwCreateWindow( WIN_WIDTH, WIN_HEIGHT, windowTitle.c_str(), NULL, NULL );
+        window = glfwCreateWindow(width, height, windowTitle.c_str(), NULL, NULL);
         if( ! window ) {
 			std::cerr << "Unable to create OpenGL context." << std::endl;
             glfwTerminate();
