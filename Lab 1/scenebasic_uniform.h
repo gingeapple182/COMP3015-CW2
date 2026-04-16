@@ -135,15 +135,27 @@ private:
     };
 
     // =========================================================
+    // Explosion particle system
+    // =========================================================
+    GLuint explosionInitVelBuf, explosionBirthTimeBuf;
+    GLuint explosionVAO;
+    GLuint explosionParticles = 1000;
+
+    float explosionLifetime = 1.0f;
+    bool explosionActive = false;
+    float explosionStartTime = 0.0f;
+    glm::vec3 explosionPos = glm::vec3(0.0f);
+
+    // =========================================================
     // Object transform settings
     // =========================================================
 
     // Wave
     glm::vec3 wavePlaneScale = glm::vec3(2.0f, 1.0f, 2.0f);
-    glm::vec3 wavePlaneOffset = glm::vec3(0.0f, 0.0f, 0.0f);
+    glm::vec3 wavePlaneOffset = glm::vec3(0.0f, 0.0f, -30.0f);
 
     // X-Wing
-    glm::vec3 shipPos = glm::vec3(0.0f, 2.0f, 0.0f);
+    glm::vec3 shipPos = glm::vec3(0.0f, 2.0f, 10.0f);
     glm::vec3 xwingScale = glm::vec3(0.5f);
 
     // TIE obstacle
@@ -174,6 +186,9 @@ private:
     float laneSpacing = 6.0f; // adjust if needed for your model scale
     bool leftLanePressed = false;
     bool rightLanePressed = false;
+
+    bool gameOver = false;
+    float collisionZThreshold = 4.0f;
 
     // =========================================================
     // Shadow mapping
@@ -207,6 +222,7 @@ private:
     void updateCamera(float dt);
 
     void initParticleBuffers();
+    void initExplosionParticleBuffers();
     float randFloat();
 
     void setWaveModelMatrix();
@@ -223,6 +239,10 @@ private:
     void randomiseTieLane();
     void resetTieObstacle();
     void updateTieObstacle(float deltaT);
+
+    bool checkTieCollision() const;
+    void triggerGameOver();
+
 public:
     SceneBasic_Uniform();
 

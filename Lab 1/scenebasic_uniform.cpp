@@ -31,6 +31,7 @@ Contents:
 7. Camera / shadow helpers
 8. Scene draw passes
 9. Lane movement helpers
+10. Gameplay helpers
 */
 
 
@@ -118,6 +119,7 @@ void SceneBasic_Uniform::initScene()
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	initParticleBuffers();
+	initExplosionParticleBuffers();
 
 	particleTex = Texture::loadTexture("media/texture/fire.png");
 	particleProg.use();
@@ -195,10 +197,24 @@ void SceneBasic_Uniform::update(float t)
 	}
 
 	updateTieObstacle(deltaT);
+
+	if (!gameOver && checkTieCollision())
+	{
+		triggerGameOver();
+	}
 	
 
 	particleTime = t;
 	particleAngle = fmod(particleAngle + 0.01f, glm::two_pi<float>());
+
+	if (explosionActive)
+	{
+		float explosionElapsed = particleTime - explosionStartTime;
+		if (explosionElapsed > explosionLifetime)
+		{
+			explosionActive = false;
+		}
+	}
 
 	GLFWwindow* win = glfwGetCurrentContext();
 	if (win)
@@ -209,12 +225,14 @@ void SceneBasic_Uniform::update(float t)
 			waveAnimationEnabled = !waveAnimationEnabled;
 		}
 		C_Pressed = cNow;
+
 		bool fNow = glfwGetKey(win, GLFW_KEY_F) == GLFW_PRESS;
-		if (fNow && !F_Pressed)
+		if (fNow && !F_Pressed && !gameOver)
 		{
 			forwardScrollEnabled = !forwardScrollEnabled;
 		}
 		F_Pressed = fNow;
+
 		updateLaneInput(win);
 		updateShipLanePosition();
 
@@ -350,41 +368,74 @@ void SceneBasic_Uniform::render()
 	wavePlane.render();
 
 	// Particle pass
-	prog.use();
-	glDepthMask(GL_FALSE);
-
-	particleProg.use();
-	particleProg.setUniform("Time", particleTime);
-
-	glm::mat4 particleModel = glm::mat4(1.0f);
-	glm::mat4 particleMV = view * particleModel;
-
-	particleProg.setUniform("MV", particleMV);
-	particleProg.setUniform("Proj", projection);
-
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, particleTex);
-	particleProg.setUniform("ParticleTex", 0);
-
-	glBindVertexArray(particleVAO);
-
-	glm::mat4 shipRotation = glm::mat4(1.0f);
-	shipRotation = glm::rotate(shipRotation, glm::radians(shipYawDeg), glm::vec3(0.0f, 1.0f, 0.0f));
-	shipRotation = glm::rotate(shipRotation, glm::radians(shipRollDeg), glm::vec3(0.0f, 0.0f, 1.0f));
-
-	for (const auto& offset : engineOffsets)
+	if (!gameOver)
 	{
-		glm::vec3 rotatedOffset = glm::vec3(shipRotation * glm::vec4(offset, 1.0f));
-		glm::vec3 worldEmitterPos = shipPos + rotatedOffset;
+		prog.use();
+		glDepthMask(GL_FALSE);
 
-		particleProg.setUniform("EmitterPos", worldEmitterPos);
-		glDrawArraysInstanced(GL_TRIANGLES, 0, 6, nParticles);
+		particleProg.use();
+		particleProg.setUniform("Time", particleTime);
+
+		glm::mat4 particleModel = glm::mat4(1.0f);
+		glm::mat4 particleMV = view * particleModel;
+
+		particleProg.setUniform("MV", particleMV);
+		particleProg.setUniform("Proj", projection);
+
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, particleTex);
+		particleProg.setUniform("ParticleTex", 0);
+
+		glBindVertexArray(particleVAO);
+
+		glm::mat4 shipRotation = glm::mat4(1.0f);
+		shipRotation = glm::rotate(shipRotation, glm::radians(shipYawDeg), glm::vec3(0.0f, 1.0f, 0.0f));
+		shipRotation = glm::rotate(shipRotation, glm::radians(shipRollDeg), glm::vec3(0.0f, 0.0f, 1.0f));
+
+		for (const auto& offset : engineOffsets)
+		{
+			glm::vec3 rotatedOffset = glm::vec3(shipRotation * glm::vec4(offset, 1.0f));
+			glm::vec3 worldEmitterPos = shipPos + rotatedOffset;
+
+			particleProg.setUniform("EmitterPos", worldEmitterPos);
+			glDrawArraysInstanced(GL_TRIANGLES, 0, 6, nParticles);
+		}
+
+		glBindVertexArray(0);
+		glDepthMask(GL_TRUE);
+
+		prog.use();
 	}
 
-	glBindVertexArray(0);
-	glDepthMask(GL_TRUE);
+	if (explosionActive)
+	{
+		glDepthMask(GL_FALSE);
 
-	prog.use();
+		particleProg.use();
+		particleProg.setUniform("Time", particleTime - explosionStartTime);
+		particleProg.setUniform("ParticleTex", 0);
+		particleProg.setUniform("ParticleLifetime", explosionLifetime);
+		particleProg.setUniform("ParticleSize", 1.2f);
+		particleProg.setUniform("Gravity", glm::vec3(0.0f, -1.2f, 0.0f));
+
+		glm::mat4 particleModel = glm::mat4(1.0f);
+		glm::mat4 particleMV = view * particleModel;
+
+		particleProg.setUniform("MV", particleMV);
+		particleProg.setUniform("Proj", projection);
+
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, particleTex);
+
+		glBindVertexArray(explosionVAO);
+		particleProg.setUniform("EmitterPos", explosionPos);
+		glDrawArraysInstanced(GL_TRIANGLES, 0, 6, explosionParticles);
+		glBindVertexArray(0);
+
+		glDepthMask(GL_TRUE);
+
+		prog.use();
+	}
 }
 
 
@@ -573,6 +624,87 @@ void SceneBasic_Uniform::initParticleBuffers()
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
+void SceneBasic_Uniform::initExplosionParticleBuffers()
+{
+	glGenBuffers(1, &explosionInitVelBuf);
+	glGenBuffers(1, &explosionBirthTimeBuf);
+
+	// -----------------------------
+	// Initial velocity buffer
+	// Explosion should spread in all directions
+	// -----------------------------
+	std::vector<GLfloat> velData(explosionParticles * 3);
+
+	for (uint32_t i = 0; i < explosionParticles; i++)
+	{
+		float z = glm::mix(-1.0f, 1.0f, randFloat());
+		float phi = glm::mix(0.0f, glm::two_pi<float>(), randFloat());
+		float r = sqrt(glm::max(0.0f, 1.0f - z * z));
+
+		glm::vec3 dir(
+			r * cos(phi),
+			z,
+			r * sin(phi)
+		);
+
+		float speed = glm::mix(3.0f, 8.0f, randFloat());
+		glm::vec3 v = glm::normalize(dir) * speed;
+
+		velData[i * 3 + 0] = v.x;
+		velData[i * 3 + 1] = v.y;
+		velData[i * 3 + 2] = v.z;
+	}
+
+	glBindBuffer(GL_ARRAY_BUFFER, explosionInitVelBuf);
+	glBufferData(GL_ARRAY_BUFFER, velData.size() * sizeof(GLfloat), velData.data(), GL_STATIC_DRAW);
+
+	// -----------------------------
+	// Birth time buffer
+	// Small spread so the burst is not perfectly uniform
+	// -----------------------------
+	std::vector<GLfloat> birthData(explosionParticles);
+
+	for (uint32_t i = 0; i < explosionParticles; i++)
+	{
+		birthData[i] = glm::mix(0.0f, 0.12f, randFloat());
+	}
+
+	glBindBuffer(GL_ARRAY_BUFFER, explosionBirthTimeBuf);
+	glBufferData(GL_ARRAY_BUFFER, birthData.size() * sizeof(GLfloat), birthData.data(), GL_STATIC_DRAW);
+
+	// -----------------------------
+	// VAO
+	// -----------------------------
+	glGenVertexArrays(1, &explosionVAO);
+	glBindVertexArray(explosionVAO);
+
+	GLuint quadVBO;
+	glGenBuffers(1, &quadVBO);
+	glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+
+	static const float dummy[6] = { 0, 1, 2, 3, 4, 5 };
+	glBufferData(GL_ARRAY_BUFFER, sizeof(dummy), dummy, GL_STATIC_DRAW);
+
+	glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+	glEnableVertexAttribArray(2);
+	glVertexAttribDivisor(2, 0);
+
+	// Attribute 0 = initial velocity
+	glBindBuffer(GL_ARRAY_BUFFER, explosionInitVelBuf);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+	glEnableVertexAttribArray(0);
+	glVertexAttribDivisor(0, 1);
+
+	// Attribute 1 = birth time
+	glBindBuffer(GL_ARRAY_BUFFER, explosionBirthTimeBuf);
+	glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+	glEnableVertexAttribArray(1);
+	glVertexAttribDivisor(1, 1);
+
+	glBindVertexArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
 
 // =========================================================
 // 7. Camera / shadow helpers
@@ -638,15 +770,18 @@ void SceneBasic_Uniform::drawShadowCasters()
 {
 	prog.use();
 
-	// X-Wing
-	setXWingModelMatrix();
-	setMatrices();
-	XWingMesh->render();
+	if (!gameOver)
+	{
+		// X-Wing
+		setXWingModelMatrix();
+		setMatrices();
+		XWingMesh->render();
 
-	// TIE
-	setTieModelMatrix();
-	setMatrices();
-	TieMesh->render();
+		// TIE
+		setTieModelMatrix();
+		setMatrices();
+		TieMesh->render();
+	}
 
 	// Flat receiver plane for testing
 	model = mat4(1.0f);
@@ -700,49 +835,52 @@ void SceneBasic_Uniform::drawSceneMain()
 
 	prog.setUniform("UseFlatColour", 0);
 
-	// X-Wing
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, XWingDiffuseTexture);
+	if (!gameOver)
+	{
+		// X-Wing
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, XWingDiffuseTexture);
 
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, XWingNormalMap);
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, XWingNormalMap);
 
-	glActiveTexture(GL_TEXTURE2);
-	glBindTexture(GL_TEXTURE_2D, rusty ? LSmixingTexture : XWingDiffuseTexture);
+		glActiveTexture(GL_TEXTURE2);
+		glBindTexture(GL_TEXTURE_2D, rusty ? LSmixingTexture : XWingDiffuseTexture);
 
-	glActiveTexture(GL_TEXTURE3);
-	glBindTexture(GL_TEXTURE_2D, shadowTex);
+		glActiveTexture(GL_TEXTURE3);
+		glBindTexture(GL_TEXTURE_2D, shadowTex);
 
-	prog.setUniform("Material.Ks", vec3(0.25f));
-	prog.setUniform("Material.Ka", vec3(0.15f));
-	prog.setUniform("Material.Shininess", 80.0f);
-	prog.setUniform("MixAmount", 0.8f);
+		prog.setUniform("Material.Ks", vec3(0.25f));
+		prog.setUniform("Material.Ka", vec3(0.15f));
+		prog.setUniform("Material.Shininess", 80.0f);
+		prog.setUniform("MixAmount", 0.8f);
 
-	setXWingModelMatrix();
-	setMatrices();
-	XWingMesh->render();
+		setXWingModelMatrix();
+		setMatrices();
+		XWingMesh->render();
 
-	// TIE
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, TieDiffuseTexture);
+		// TIE
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, TieDiffuseTexture);
 
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, XWingNormalMap); // temporary fallback, replace with real TIE normal if you get one
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, XWingNormalMap);
 
-	glActiveTexture(GL_TEXTURE2);
-	glBindTexture(GL_TEXTURE_2D, TieDiffuseTexture);
+		glActiveTexture(GL_TEXTURE2);
+		glBindTexture(GL_TEXTURE_2D, TieDiffuseTexture);
 
-	glActiveTexture(GL_TEXTURE3);
-	glBindTexture(GL_TEXTURE_2D, shadowTex);
+		glActiveTexture(GL_TEXTURE3);
+		glBindTexture(GL_TEXTURE_2D, shadowTex);
 
-	prog.setUniform("Material.Ks", vec3(0.25f));
-	prog.setUniform("Material.Ka", vec3(0.15f));
-	prog.setUniform("Material.Shininess", 80.0f);
-	prog.setUniform("MixAmount", 0.0f);
+		prog.setUniform("Material.Ks", vec3(0.25f));
+		prog.setUniform("Material.Ka", vec3(0.15f));
+		prog.setUniform("Material.Shininess", 80.0f);
+		prog.setUniform("MixAmount", 0.0f);
 
-	setTieModelMatrix();
-	setMatrices();
-	TieMesh->render();
+		setTieModelMatrix();
+		setMatrices();
+		TieMesh->render();
+	}
 }
 
 
@@ -803,13 +941,39 @@ void SceneBasic_Uniform::resetTieObstacle()
 
 void SceneBasic_Uniform::updateTieObstacle(float deltaT)
 {
-	if (!forwardScrollEnabled)
+	if (!forwardScrollEnabled || gameOver)
 		return;
-	
+
 	tiePos.z += tieMoveSpeed * deltaT;
 
 	if (tiePos.z > tieDespawnZ)
 	{
 		resetTieObstacle();
 	}
+}
+
+
+// =========================================================
+// 10. Gameplay helpers
+// =========================================================
+
+bool SceneBasic_Uniform::checkTieCollision() const
+{
+	if (currentLane != tieLane)
+		return false;
+
+	float zDistance = glm::abs(tiePos.z - shipPos.z);
+	return zDistance < collisionZThreshold;
+}
+
+void SceneBasic_Uniform::triggerGameOver()
+{
+	gameOver = true;
+	forwardScrollEnabled = false;
+
+	explosionActive = true;
+	explosionStartTime = particleTime;
+	explosionPos = shipPos;
+
+	std::cout << "GAME OVER\n";
 }
