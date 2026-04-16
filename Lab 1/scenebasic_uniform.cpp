@@ -954,10 +954,23 @@ void SceneBasic_Uniform::drawShadowCasters()
 		setMatrices();
 		XWingMesh->render();
 
-		// TIE
+		// TIE 1
 		setTieModelMatrix();
 		setMatrices();
 		TieMesh->render();
+
+		// TIE 2
+		if (secondTieActive)
+		{
+			glm::vec3 originalTiePos = tiePos;
+			tiePos = tiePos2;
+
+			setTieModelMatrix();
+			setMatrices();
+			TieMesh->render();
+
+			tiePos = originalTiePos;
+		}
 	}
 
 	// Flat receiver plane for testing
@@ -1036,7 +1049,7 @@ void SceneBasic_Uniform::drawSceneMain()
 		setMatrices();
 		XWingMesh->render();
 
-		// TIE
+		// TIE 1
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, TieDiffuseTexture);
 
@@ -1057,6 +1070,19 @@ void SceneBasic_Uniform::drawSceneMain()
 		setTieModelMatrix();
 		setMatrices();
 		TieMesh->render();
+
+		// TIE 2
+		if (secondTieActive)
+		{
+			glm::vec3 originalTiePos = tiePos;
+			tiePos = tiePos2;
+
+			setTieModelMatrix();
+			setMatrices();
+			TieMesh->render();
+
+			tiePos = originalTiePos;
+		}
 	}
 }
 
@@ -1107,6 +1133,21 @@ void SceneBasic_Uniform::randomiseTieLane()
 	if (tieLane >= laneCount) tieLane = laneCount - 1;
 }
 
+int SceneBasic_Uniform::randomDifferentLane(int excludedLane)
+{
+	int lane = excludedLane;
+
+	while (lane == excludedLane)
+	{
+		lane = static_cast<int>(randFloat() * laneCount);
+
+		if (lane < 0) lane = 0;
+		if (lane >= laneCount) lane = laneCount - 1;
+	}
+
+	return lane;
+}
+
 void SceneBasic_Uniform::resetTieObstacle()
 {
 	randomiseTieLane();
@@ -1115,6 +1156,19 @@ void SceneBasic_Uniform::resetTieObstacle()
 	tiePos.y = tieY;
 	tiePos.z = tieStartZ;
 	tieHasPassedPlayer = false;
+
+	// Occasionally spawn a second TIE in a different lane
+	secondTieActive = (randFloat() < doubleTieSpawnChance);
+
+	if (secondTieActive)
+	{
+		tieLane2 = randomDifferentLane(tieLane);
+
+		tiePos2.x = (tieLane2 - 1) * laneSpacing;
+		tiePos2.y = tieY;
+		tiePos2.z = tieStartZ - 50.0f;
+		tie2HasPassedPlayer = false;
+	}
 }
 
 void SceneBasic_Uniform::updateTieObstacle(float deltaT)
@@ -1122,6 +1176,7 @@ void SceneBasic_Uniform::updateTieObstacle(float deltaT)
 	if (!forwardScrollEnabled || runState == RunState::GameOver)
 		return;
 
+	// Primary TIE
 	tiePos.z += tieMoveSpeed * deltaT;
 
 	if (!tieHasPassedPlayer && tiePos.z > shipPos.z)
@@ -1135,7 +1190,28 @@ void SceneBasic_Uniform::updateTieObstacle(float deltaT)
 		}
 	}
 
-	if (tiePos.z > tieDespawnZ)
+	// Optional second TIE
+	if (secondTieActive)
+	{
+		tiePos2.z += tieMoveSpeed * deltaT;
+
+		if (!tie2HasPassedPlayer && tiePos2.z > shipPos.z)
+		{
+			tie2HasPassedPlayer = true;
+			score += 100;
+
+			if (soundEngine)
+			{
+				soundEngine->play2D("media/audio/tie_flyby.mp3", false);
+			}
+		}
+	}
+
+	// Reset when all active TIEs are past despawn
+	bool firstGone = (tiePos.z > tieDespawnZ);
+	bool secondGone = (!secondTieActive || tiePos2.z > tieDespawnZ);
+
+	if (firstGone && secondGone)
 	{
 		resetTieObstacle();
 	}
@@ -1148,11 +1224,23 @@ void SceneBasic_Uniform::updateTieObstacle(float deltaT)
 
 bool SceneBasic_Uniform::checkTieCollision() const
 {
-	if (currentLane != tieLane)
-		return false;
+	// Primary TIE
+	if (currentLane == tieLane)
+	{
+		float zDistance = glm::abs(tiePos.z - shipPos.z);
+		if (zDistance < collisionZThreshold)
+			return true;
+	}
 
-	float zDistance = glm::abs(tiePos.z - shipPos.z);
-	return zDistance < collisionZThreshold;
+	// Secondary TIE
+	if (secondTieActive && currentLane == tieLane2)
+	{
+		float zDistance2 = glm::abs(tiePos2.z - shipPos.z);
+		if (zDistance2 < collisionZThreshold)
+			return true;
+	}
+
+	return false;
 }
 
 void SceneBasic_Uniform::triggerGameOver()

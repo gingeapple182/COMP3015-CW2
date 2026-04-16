@@ -201,13 +201,20 @@ private:
     int tieLane = 1;
     float tieBaseMoveSpeed = 10.0f;
     float tieMoveSpeed = 10.0f;
-    float tieMaxMoveSpeed = 40.0f;
+    float tieMaxMoveSpeed = 60.0f;
     bool tieHasPassedPlayer = false;
     float difficultyTime = 0.0f;
     float speedIncreasePerSecond = 1.2f;
     float tieStartZ = -50.0f;
     float tieDespawnZ = 25.0f;
     float tieY = 3.0f;
+
+    // Optional second TIE obstacle
+    glm::vec3 tiePos2 = glm::vec3(0.0f, 3.0f, -30.0f);
+    int tieLane2 = 1;
+    bool secondTieActive = false;
+    bool tie2HasPassedPlayer = false;
+    float doubleTieSpawnChance = 0.35f;
 
     // =========================================================
     // Camera settings
@@ -285,6 +292,7 @@ private:
     void updateShipLanePosition();
 
     void randomiseTieLane();
+    int randomDifferentLane(int excludedLane);
     void resetTieObstacle();
     void updateTieObstacle(float deltaT);
 
