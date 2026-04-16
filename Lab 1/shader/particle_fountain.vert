@@ -12,6 +12,7 @@ uniform float ParticleLifetime;
 uniform float ParticleSize = 1.0;
 uniform vec3 EmitterPos;
 
+
 uniform mat4 MV;
 uniform mat4 Proj;
 

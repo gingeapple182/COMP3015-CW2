@@ -120,19 +120,41 @@ void SceneBasic_Uniform::initScene()
 
 	initParticleBuffers();
 	initExplosionParticleBuffers();
+	initSmokeParticleBuffers();
 
 	particleTex = Texture::loadTexture("media/texture/fire.png");
+	smokeTex = Texture::loadTexture("media/texture/smoke.png");
+
 	particleProg.use();
 	particleProg.setUniform("ParticleTex", 0);
 	particleProg.setUniform("ParticleLifetime", particleLifetime);
 	particleProg.setUniform("ParticleSize", 0.4f);
 	particleProg.setUniform("Gravity", glm::vec3(0.0f, -0.2f, 0.0f));
-	//particleProg.setUniform("EmitterPos", emitterPos);
+
+	smokeProg.use();
+	smokeProg.setUniform("ParticleTex", 0);
+	smokeProg.setUniform("ParticleLifetime", smokeLifetime);
+	smokeProg.setUniform("Gravity", glm::vec3(0.0f, 0.15f, 0.0f));
+	smokeProg.setUniform("MinParticleSize", smokeMinParticleSize);
+	smokeProg.setUniform("MaxParticleSize", smokeMaxParticleSize);
 
 	waveProg.use();
 	waveProg.setUniform("ShadowMap", 3);
 
 	prog.use();
+
+	textRenderer.init(
+		"shader/text.vert",
+		"shader/text.frag",
+		"media/text/spr_font_hellomyoldfriend_12x12_by_lotovik_sheet.png",
+		"media/text/spr_font_hellomyoldfriend_12x12_by_lotovik_characterstring.txt",
+		width,
+		height,
+		24,
+		24,
+		10,
+		11
+	);
 
 	// lane runner defaults
 	currentLane = 1;
@@ -163,6 +185,10 @@ void SceneBasic_Uniform::compile()
 		particleProg.compileShader("shader/particle_fountain.frag");
 		particleProg.link();
 
+		smokeProg.compileShader("shader/particle_smoke.vert");
+		smokeProg.compileShader("shader/particle_fountain.frag");
+		smokeProg.link();
+
 		particleFlatProg.compileShader("shader/flat_vert.glsl");
 		particleFlatProg.compileShader("shader/flat_frag.glsl");
 		particleFlatProg.link();
@@ -191,19 +217,6 @@ void SceneBasic_Uniform::update(float t)
 		waveTime = t;
 	}
 
-	if (forwardScrollEnabled)
-	{
-		forwardScrollOffset += forwardScrollSpeed * deltaT;
-	}
-
-	updateTieObstacle(deltaT);
-
-	if (!gameOver && checkTieCollision())
-	{
-		triggerGameOver();
-	}
-	
-
 	particleTime = t;
 	particleAngle = fmod(particleAngle + 0.01f, glm::two_pi<float>());
 
@@ -227,39 +240,63 @@ void SceneBasic_Uniform::update(float t)
 		C_Pressed = cNow;
 
 		bool fNow = glfwGetKey(win, GLFW_KEY_F) == GLFW_PRESS;
-		if (fNow && !F_Pressed && !gameOver)
+		if (fNow && !F_Pressed)
 		{
-			forwardScrollEnabled = !forwardScrollEnabled;
+			if (runState == RunState::StartScreen)
+			{
+				runState = RunState::Playing;
+				forwardScrollEnabled = true;
+				score = 0;
+				resetTieObstacle();
+				currentLane = 1;
+				updateShipLanePosition();
+				shipRollDeg = 0.0f;
+			}
 		}
 		F_Pressed = fNow;
 
-		updateLaneInput(win);
-		updateShipLanePosition();
-
-		float rollInput = 0.0f;
-
-		if (glfwGetKey(win, GLFW_KEY_A) == GLFW_PRESS || glfwGetKey(win, GLFW_KEY_LEFT) == GLFW_PRESS)
-			rollInput = 1.0f;
-
-		if (glfwGetKey(win, GLFW_KEY_D) == GLFW_PRESS || glfwGetKey(win, GLFW_KEY_RIGHT) == GLFW_PRESS)
-			rollInput = -1.0f;
-
-		if (rollInput != 0.0f)
+		if (runState == RunState::Playing)
 		{
-			shipRollDeg += rollInput * shipRollSpeed * deltaT;
-			shipRollDeg = glm::clamp(shipRollDeg, -maxShipRollDeg, maxShipRollDeg);
-		}
-		else
-		{
-			if (shipRollDeg > 0.0f)
+			if (forwardScrollEnabled)
 			{
-				shipRollDeg -= shipRollSpeed * deltaT;
-				if (shipRollDeg < 0.0f) shipRollDeg = 0.0f;
+				forwardScrollOffset += forwardScrollSpeed * deltaT;
 			}
-			else if (shipRollDeg < 0.0f)
+
+			updateTieObstacle(deltaT);
+
+			if (checkTieCollision())
 			{
-				shipRollDeg += shipRollSpeed * deltaT;
-				if (shipRollDeg > 0.0f) shipRollDeg = 0.0f;
+				triggerGameOver();
+			}
+
+			updateLaneInput(win);
+			updateShipLanePosition();
+
+			float rollInput = 0.0f;
+
+			if (glfwGetKey(win, GLFW_KEY_A) == GLFW_PRESS || glfwGetKey(win, GLFW_KEY_LEFT) == GLFW_PRESS)
+				rollInput = 1.0f;
+
+			if (glfwGetKey(win, GLFW_KEY_D) == GLFW_PRESS || glfwGetKey(win, GLFW_KEY_RIGHT) == GLFW_PRESS)
+				rollInput = -1.0f;
+
+			if (rollInput != 0.0f)
+			{
+				shipRollDeg += rollInput * shipRollSpeed * deltaT;
+				shipRollDeg = glm::clamp(shipRollDeg, -maxShipRollDeg, maxShipRollDeg);
+			}
+			else
+			{
+				if (shipRollDeg > 0.0f)
+				{
+					shipRollDeg -= shipRollSpeed * deltaT;
+					if (shipRollDeg < 0.0f) shipRollDeg = 0.0f;
+				}
+				else if (shipRollDeg < 0.0f)
+				{
+					shipRollDeg += shipRollSpeed * deltaT;
+					if (shipRollDeg > 0.0f) shipRollDeg = 0.0f;
+				}
 			}
 		}
 	}
@@ -271,12 +308,17 @@ void SceneBasic_Uniform::update(float t)
 
 void SceneBasic_Uniform::render()
 {
-	// Light setup
-	glm::vec4 lightPosWorld = glm::vec4(10.0f * cos(angle), 10.0f, 10.0f * sin(angle), 1.0f);
-	glm::vec3 lightTarget = glm::vec3(0.0f, 2.0f, 3.0f);
+	// Directional light used for both lighting and shadow mapping
+	glm::vec3 lightDirWorld = glm::normalize(glm::vec3(-0.6f, -1.0f, -0.4f));
 
-	lightView = glm::lookAt(glm::vec3(lightPosWorld), lightTarget, glm::vec3(0.0f, 1.0f, 0.0f));
-	lightProj = glm::perspective(glm::radians(45.0f), 1.0f, 1.0f, 50.0f);
+	// Centre the shadow area around the gameplay area / ship
+	glm::vec3 shadowCenter = glm::vec3(shipPos.x, 0.0f, shipPos.z);
+
+	// Place the shadow camera back along the light direction
+	glm::vec3 lightPosWorld = shadowCenter - lightDirWorld * 30.0f;
+
+	lightView = glm::lookAt(lightPosWorld, shadowCenter, glm::vec3(0.0f, 1.0f, 0.0f));
+	lightProj = glm::ortho(-30.0f, 30.0f, -30.0f, 30.0f, 1.0f, 80.0f);
 
 	// ---------- PASS 1: render shadow map ----------
 	glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
@@ -301,17 +343,16 @@ void SceneBasic_Uniform::render()
 	projection = glm::perspective(glm::radians(70.0f), (float)width / height, 0.3f, 100.0f);
 	updateCamera(0.0f);
 
+	// Convert directional light into view space for normal scene shading
+	glm::vec3 lightDirViewSpace = glm::mat3(view) * -lightDirWorld;
+
 	prog.use();
 
-	// Spotlight uniforms
-	prog.setUniform("Spot.Position", glm::vec3(view * lightPosWorld));
+	// Keep these if your main shader still expects them
+	prog.setUniform("Spot.Position", glm::vec3(view * glm::vec4(lightPosWorld, 1.0f)));
+	prog.setUniform("Spot.Direction", glm::mat3(view) * lightDirWorld);
 
-	glm::vec3 lightDirWorldSpot = glm::normalize(lightTarget - glm::vec3(lightPosWorld));
-	glm::vec3 lightDirView = glm::mat3(view) * lightDirWorldSpot;
-	prog.setUniform("Spot.Direction", lightDirView);
-
-	glm::vec3 lightDirWorld = glm::normalize(glm::vec3(-0.6f, -1.0f, -0.4f));
-	glm::vec3 lightDirViewSpace = glm::mat3(view) * -lightDirWorld;
+	// Main directional light for shading
 	prog.setUniform("Light.Position", glm::vec4(lightDirViewSpace, 0.0f));
 
 	prog.setUniform("FogEnabled", fogEnabled ? 1 : 0);
@@ -351,9 +392,6 @@ void SceneBasic_Uniform::render()
 	waveProg.setUniform("Time", waveTime);
 	waveProg.setUniform("ForwardOffset", forwardScrollOffset);
 
-	//glm::vec3 lightDirWorld = glm::normalize(glm::vec3(-0.6f, -1.0f, -0.4f));
-	//glm::vec3 lightDirViewSpace = glm::mat3(view) * -lightDirWorld;
-
 	waveProg.setUniform("LightPosition", glm::vec4(lightDirViewSpace, 0.0f));
 	waveProg.setUniform("LightIntensity", glm::vec3(0.5f));
 	waveProg.setUniform("AmbientLight", glm::vec3(0.25f));
@@ -368,7 +406,8 @@ void SceneBasic_Uniform::render()
 	wavePlane.render();
 
 	// Particle pass
-	if (!gameOver)
+	//if (runState != RunState::GameOver || runState != RunState::StartScreen)
+	if (runState == RunState::Playing)
 	{
 		prog.use();
 		glDepthMask(GL_FALSE);
@@ -436,6 +475,38 @@ void SceneBasic_Uniform::render()
 
 		prog.use();
 	}
+
+	if (smokeActive)
+	{
+		glDepthMask(GL_FALSE);
+
+		smokeProg.use();
+		smokeProg.setUniform("Time", particleTime - smokeStartTime);
+		smokeProg.setUniform("ParticleTex", 0);
+		smokeProg.setUniform("ParticleLifetime", smokeLifetime);
+		smokeProg.setUniform("Gravity", glm::vec3(0.0f, 0.15f, 0.0f));
+		smokeProg.setUniform("MinParticleSize", smokeMinParticleSize);
+		smokeProg.setUniform("MaxParticleSize", smokeMaxParticleSize);
+
+		glm::mat4 particleModel = glm::mat4(1.0f);
+		glm::mat4 particleMV = view * particleModel;
+
+		smokeProg.setUniform("MV", particleMV);
+		smokeProg.setUniform("Proj", projection);
+
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, smokeTex);
+
+		glBindVertexArray(smokeVAO);
+		smokeProg.setUniform("EmitterPos", smokePos);
+		glDrawArraysInstanced(GL_TRIANGLES, 0, 6, smokeParticles);
+		glBindVertexArray(0);
+
+		glDepthMask(GL_TRUE);
+
+		prog.use();
+	}
+	renderUI();
 }
 
 
@@ -445,6 +516,8 @@ void SceneBasic_Uniform::resize(int w, int h)
 	width = w;
 	height = h;
 	projection = glm::perspective(glm::radians(70.0f), (float)w / h, 0.3f, 100.0f);
+
+	textRenderer.resize(w, h);
 }
 
 
@@ -705,6 +778,82 @@ void SceneBasic_Uniform::initExplosionParticleBuffers()
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
+void SceneBasic_Uniform::initSmokeParticleBuffers()
+{
+	glGenBuffers(1, &smokeInitVelBuf);
+	glGenBuffers(1, &smokeBirthTimeBuf);
+
+	// -----------------------------
+	// Initial velocity buffer
+	// Smoke rises upward with soft sideways spread
+	// -----------------------------
+	std::vector<GLfloat> velData(smokeParticles * 3);
+
+	for (uint32_t i = 0; i < smokeParticles; i++)
+	{
+		float x = glm::mix(-0.5f, 0.5f, randFloat());
+		float y = glm::mix(0.9f, 1.4f, randFloat());
+		float z = glm::mix(-0.5f, 0.5f, randFloat());
+
+		glm::vec3 dir = glm::normalize(glm::vec3(x, y, z));
+		float speed = glm::mix(0.45f, 1.1f, randFloat());
+		glm::vec3 v = dir * speed;
+
+		velData[i * 3 + 0] = v.x;
+		velData[i * 3 + 1] = v.y;
+		velData[i * 3 + 2] = v.z;
+	}
+
+	glBindBuffer(GL_ARRAY_BUFFER, smokeInitVelBuf);
+	glBufferData(GL_ARRAY_BUFFER, velData.size() * sizeof(GLfloat), velData.data(), GL_STATIC_DRAW);
+
+	// -----------------------------
+	// Birth time buffer
+	// Spread births across one lifetime so emission loops continuously
+	// -----------------------------
+	std::vector<GLfloat> birthData(smokeParticles);
+	float rate = smokeLifetime / static_cast<float>(smokeParticles);
+
+	for (uint32_t i = 0; i < smokeParticles; i++)
+	{
+		birthData[i] = rate * i;
+	}
+
+	glBindBuffer(GL_ARRAY_BUFFER, smokeBirthTimeBuf);
+	glBufferData(GL_ARRAY_BUFFER, birthData.size() * sizeof(GLfloat), birthData.data(), GL_STATIC_DRAW);
+
+	// -----------------------------
+	// VAO
+	// -----------------------------
+	glGenVertexArrays(1, &smokeVAO);
+	glBindVertexArray(smokeVAO);
+
+	GLuint quadVBO;
+	glGenBuffers(1, &quadVBO);
+	glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+
+	static const float dummy[6] = { 0, 1, 2, 3, 4, 5 };
+	glBufferData(GL_ARRAY_BUFFER, sizeof(dummy), dummy, GL_STATIC_DRAW);
+
+	glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+	glEnableVertexAttribArray(2);
+	glVertexAttribDivisor(2, 0);
+
+	glBindBuffer(GL_ARRAY_BUFFER, smokeInitVelBuf);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+	glEnableVertexAttribArray(0);
+	glVertexAttribDivisor(0, 1);
+
+	glBindBuffer(GL_ARRAY_BUFFER, smokeBirthTimeBuf);
+	glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+	glEnableVertexAttribArray(1);
+	glVertexAttribDivisor(1, 1);
+
+	glBindVertexArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+
 
 // =========================================================
 // 7. Camera / shadow helpers
@@ -770,7 +919,7 @@ void SceneBasic_Uniform::drawShadowCasters()
 {
 	prog.use();
 
-	if (!gameOver)
+	if (runState != RunState::GameOver)
 	{
 		// X-Wing
 		setXWingModelMatrix();
@@ -835,7 +984,7 @@ void SceneBasic_Uniform::drawSceneMain()
 
 	prog.setUniform("UseFlatColour", 0);
 
-	if (!gameOver)
+	if (runState != RunState::GameOver)
 	{
 		// X-Wing
 		glActiveTexture(GL_TEXTURE0);
@@ -941,13 +1090,14 @@ void SceneBasic_Uniform::resetTieObstacle()
 
 void SceneBasic_Uniform::updateTieObstacle(float deltaT)
 {
-	if (!forwardScrollEnabled || gameOver)
+	if (!forwardScrollEnabled || runState == RunState::GameOver)
 		return;
 
 	tiePos.z += tieMoveSpeed * deltaT;
 
 	if (tiePos.z > tieDespawnZ)
 	{
+		score += 100;
 		resetTieObstacle();
 	}
 }
@@ -968,12 +1118,52 @@ bool SceneBasic_Uniform::checkTieCollision() const
 
 void SceneBasic_Uniform::triggerGameOver()
 {
-	gameOver = true;
+	runState = RunState::GameOver;
 	forwardScrollEnabled = false;
 
 	explosionActive = true;
 	explosionStartTime = particleTime;
 	explosionPos = shipPos;
 
+	smokeActive = true;
+	smokeStartTime = particleTime;
+	smokePos = glm::vec3(shipPos.x, 0.2f, shipPos.z);
+
 	std::cout << "GAME OVER\n";
+}
+
+// =========================================================
+// UI
+// =========================================================
+
+void SceneBasic_Uniform::renderUI()
+{
+	if (!textRenderer.isInitialised())
+		return;
+
+	glDisable(GL_DEPTH_TEST);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	if (runState == RunState::StartScreen)
+	{
+		textRenderer.renderTextShadowed("X-WING RUNNER", 40.0f, height - 70.0f, 3.0f);
+		textRenderer.renderTextShadowed("PRESS F TO START", 40.0f, height - 130.0f, 1.25f);
+		textRenderer.renderTextShadowed("A / D OR ARROWS TO MOVE", 40.0f, height - 165.0f, 0.9f);
+		textRenderer.renderTextShadowed("AVOID THE TIE FIGHTERS", 40.0f, height - 195.0f, 0.9f);
+	}
+	else if (runState == RunState::Playing)
+	{
+		std::string scoreText = "SCORE: " + std::to_string(score);
+		textRenderer.renderTextShadowed(scoreText, 20.0f, height - 40.0f, 1.0f);
+	}
+	else if (runState == RunState::GameOver)
+	{
+		textRenderer.renderTextShadowed("GAME OVER", 40.0f, height - 100.0f, 2.0f);
+
+		std::string scoreText = "FINAL SCORE: " + std::to_string(score);
+		textRenderer.renderTextShadowed(scoreText, 40.0f, height - 150.0f, 1.0f);
+	}
+
+	glEnable(GL_DEPTH_TEST);
 }

@@ -18,6 +18,7 @@
 #include "helper/skybox.h"
 #include "helper/particleutils.h"
 #include "helper/random.h"
+#include "helper/text_renderer.h"
 
 class SceneBasic_Uniform : public Scene
 {
@@ -47,6 +48,20 @@ private:
     GLuint WorkbenchDiffuseMap;
     GLuint waveDiffuseTexture;
     GLuint cubeTex;
+
+    // =========================================================
+    // Gameplay State
+    // =========================================================
+    enum class RunState
+    {
+        StartScreen,
+        Playing,
+        GameOver
+    };
+
+    RunState runState = RunState::StartScreen;
+
+    int score = 0;
 
     // =========================================================
     // General scene timing / animation state
@@ -98,7 +113,8 @@ private:
     // =========================================================
     // Shader programs
     // =========================================================
-    GLSLProgram prog, skyboxShader, waveProg, particleProg, particleFlatProg;
+    GLSLProgram prog, skyboxShader, waveProg, particleProg, smokeProg, particleFlatProg;
+    BitmapTextRenderer textRenderer;
 
     // =========================================================
     // Random helper
@@ -112,6 +128,7 @@ private:
     GLuint particleVAO;
     GLuint nParticles = 2000;
     GLuint particleTex;
+    GLuint smokeTex; 
 
     float particleLifetime = 0.3f;
     float particleTime = 0.0f;
@@ -147,12 +164,27 @@ private:
     glm::vec3 explosionPos = glm::vec3(0.0f);
 
     // =========================================================
+    // Smoke particle system
+    // =========================================================
+    GLuint smokeInitVelBuf, smokeBirthTimeBuf;
+    GLuint smokeVAO;
+    GLuint smokeParticles = 600;
+
+    float smokeLifetime = 2.8f;
+    bool smokeActive = false;
+    glm::vec3 smokePos = glm::vec3(0.0f);
+    float smokeStartTime = 0.0f;
+
+    float smokeMinParticleSize = 0.4f;
+    float smokeMaxParticleSize = 1.8f;
+
+    // =========================================================
     // Object transform settings
     // =========================================================
 
     // Wave
     glm::vec3 wavePlaneScale = glm::vec3(2.0f, 1.0f, 2.0f);
-    glm::vec3 wavePlaneOffset = glm::vec3(0.0f, 0.0f, -30.0f);
+    glm::vec3 wavePlaneOffset = glm::vec3(0.0f, 0.0f, 00.0f);
 
     // X-Wing
     glm::vec3 shipPos = glm::vec3(0.0f, 2.0f, 10.0f);
@@ -172,7 +204,7 @@ private:
     // Camera settings
     // =========================================================
     glm::vec3 camTarget = glm::vec3(0.0f, 1.0f, 0.0f);
-    glm::vec3 camOffset = glm::vec3(0.0f, 5.5f, 18.0f);
+    glm::vec3 camOffset = glm::vec3(0.0f, 5.5f, 12.0f);
 
     glm::vec3 camPos = glm::vec3(0.0f, 6.0f, 14.0f);
     glm::vec3 camUp = glm::vec3(0.0f, 1.0f, 0.0f);
@@ -187,7 +219,7 @@ private:
     bool leftLanePressed = false;
     bool rightLanePressed = false;
 
-    bool gameOver = false;
+    //bool gameOver = false;
     float collisionZThreshold = 4.0f;
 
     // =========================================================
@@ -223,6 +255,7 @@ private:
 
     void initParticleBuffers();
     void initExplosionParticleBuffers();
+    void initSmokeParticleBuffers();
     float randFloat();
 
     void setWaveModelMatrix();
@@ -242,6 +275,8 @@ private:
 
     bool checkTieCollision() const;
     void triggerGameOver();
+
+    void renderUI();
 
 public:
     SceneBasic_Uniform();

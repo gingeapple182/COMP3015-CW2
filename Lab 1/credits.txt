@@ -3,3 +3,7 @@ X-Wing:
 
 Tie:
 "Star Wars Battlefront - TIE Fighter" (https://skfb.ly/oRtLV) by Neut2000 is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
+
+Font:
+https://lotovik.itch.io/hello-my-old-friend
+bitmap font - hello, my old friend © 2022 by lotovik is licensed under CC BY-SA 4.0

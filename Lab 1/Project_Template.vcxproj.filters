@@ -78,6 +78,9 @@
     <ClCompile Include="helper\grid.cpp">
       <Filter>helper</Filter>
     </ClCompile>
+    <ClCompile Include="helper\text_renderer.cpp">
+      <Filter>helper</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="shader\basic_uniform.frag">
@@ -108,6 +111,15 @@
       <Filter>shaders</Filter>
     </None>
     <None Include="shader\particle_fountain.vert">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shader\particle_smoke.vert">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shader\text.frag">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shader\text.vert">
       <Filter>shaders</Filter>
     </None>
   </ItemGroup>
@@ -182,6 +194,9 @@
       <Filter>helper</Filter>
     </ClInclude>
     <ClInclude Include="helper\aabb.h">
+      <Filter>helper</Filter>
+    </ClInclude>
+    <ClInclude Include="helper\text_renderer.h">
       <Filter>helper</Filter>
     </ClInclude>
   </ItemGroup>

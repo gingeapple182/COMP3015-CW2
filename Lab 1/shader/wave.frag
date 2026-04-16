@@ -26,7 +26,9 @@ float getShadowFactor()
 
     vec3 projCoords = ShadowCoord.xyz / ShadowCoord.w;
 
-    if (projCoords.z < 0.0 || projCoords.z > 1.0)
+    if (projCoords.x < 0.0 || projCoords.x > 1.0 ||
+        projCoords.y < 0.0 || projCoords.y > 1.0 ||
+        projCoords.z < 0.0 || projCoords.z > 1.0)
         return 1.0;
 
     return texture(ShadowMap, projCoords);
