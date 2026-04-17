@@ -43,19 +43,6 @@ void main()
 
     Transp = 1.0 - (t / ParticleLifetime);
 
-    //if(t >= 0 && t < ParticleLifetime)
-    //{
-    //    vec3 pos = EmitterPos + VertexInitVel * t + Gravity * t * t;
-    //    cameraPos = (MV * vec4(pos, 1.0)).xyz + offsets[gl_VertexID] * ParticleSize;
-    //    Transp = mix(1.0, 0.0, t / ParticleLifetime);
-    //}
-    //else
-    //{
-    //    cameraPos = vec3(0);
-    //    Transp = 0.0;
-    //}
-
-
     TexCoord = texCoords[gl_VertexID];
     gl_Position = Proj * vec4(cameraPos, 1.0);
 }
