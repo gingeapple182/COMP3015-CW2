@@ -232,28 +232,6 @@ These files manage:
 
 ---
 
-## What Makes This Project Special
-What makes this project stand out compared with a simpler shader demo is that it combines several advanced rendering features into one playable scene rather than demonstrating them in isolation.
-
-The project is not just:
-- a model viewer
-- a single-effect shader test
-- a static scene
-
-Instead, it combines:
-- animated water
-- shadowed 3D objects
-- continuous particle effects
-- reactive failure effects
-- audio
-- HUD / menu text
-- scoring and increasing challenge
-
-into one coherent prototype.
-
-It began from the COMP3015 lab framework and earlier coursework foundations, but was developed into a different style of project with its own gameplay loop, scene composition, and effect combination. The strongest CW2 additions are the surface animation, shadow mapping, particle systems, and the lane-runner game structure built around them. The CW2 brief specifically expects later-technique shader work to be combined into one efficient render pipeline, and that is the main aim of this project. :contentReference[oaicite:2]{index=2} :contentReference[oaicite:3]{index=3}
-
----
 
 ## Where to Find Things (Quick Navigation)
 
