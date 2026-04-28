@@ -231,7 +231,7 @@ private:
     // =========================================================
     static constexpr int laneCount = 3;
     int currentLane = 1;      // 0 = left, 1 = centre, 2 = right
-    float laneSpacing = 6.0f; // adjust if needed for your model scale
+    float laneSpacing = 6.0f;
     bool leftLanePressed = false;
     bool rightLanePressed = false;
 
