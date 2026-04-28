@@ -41,7 +41,7 @@ https://github.com/gingeapple182/COMP3015-CW2
 
 
 ### Running the pre-built executable
-- A compiled **.exe** is included in the submission/build files.
+- A compiled **Project_Template.exe** is included in the submission/build files.
 - Run the executable directly to use the project without opening Visual Studio.
 - If Windows blocks it: right click → **Properties** → tick **Unblock** → **Apply**.
 
